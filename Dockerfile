@@ -7,7 +7,7 @@ FROM chef as planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 #缓存依赖关系 阶段
-FROM chef as builder
+FROM debian:bullseye-slim AS builder
 COPY --from=planner /app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
