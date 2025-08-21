@@ -1,7 +1,7 @@
 use actix_web::{web, HttpResponse};
 use secrecy::Secret;
 use secrecy::ExposeSecret;
-use serde_aux::field_attributes::Deserialize_number_from_string;
+use serde_aux::field_attributes::deserialize_number_from_string;
 
 #[derive(serde::Deserialize)]
 pub struct Settings {
