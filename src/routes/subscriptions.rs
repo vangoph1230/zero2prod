@@ -33,7 +33,7 @@ pub async fn insert_subscriber(
     pool: &PgPool,
     form: &FormData
 ) -> Result<(), sqlx::Error> {
-    /* sqlx::query!(
+    sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at)
         VALUES ($1, $2, $3, $4)
@@ -49,6 +49,6 @@ pub async fn insert_subscriber(
         tracing::error!("Failed to execute query: {:?}", e);
         e
     })?;
-   */
+    
     Ok(())
 }
