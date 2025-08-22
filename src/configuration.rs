@@ -106,7 +106,7 @@ impl DatabaseSettings {
 
     pub fn without_db(&self) -> PgConnectOptions {
         let ssl_mode = if self.require_ssl {
-            PgSslMode::Request
+            PgSslMode::Require
         } else {
             PgSslMode::Prefer
         };
