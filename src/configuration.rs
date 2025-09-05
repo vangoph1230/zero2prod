@@ -23,7 +23,7 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
 
 impl DatabaseSettings {
 
-    /// 构建Postgres数据库的连接字符串
+    /// 构建完整的Postgres数据库连接字符串
     pub fn connection_string(&self) -> String {
         format!(
             "postgres://{}:{}@{}:{}/{}",
@@ -32,6 +32,17 @@ impl DatabaseSettings {
             self.host,
             self.port,
             self.database_name,
+        )
+    }
+
+    /// 返回 缺少数据库名 的数据库连接字符串
+    pub fn connection_string_without_db(&self) -> String {
+        format!(
+            "postgres://{}:{}@{}:{}",
+            self.username,
+            self.password,
+            self.host,
+            self.port,
         )
     }
     
