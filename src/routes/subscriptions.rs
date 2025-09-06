@@ -3,6 +3,7 @@ use chrono::Utc;
 use uuid::Uuid;
 use actix_web::{web, HttpResponse};
 use sqlx::PgPool;
+use tracing::{instrument, Instrument};
 
 
 #[derive(serde::Deserialize)]
@@ -36,17 +37,17 @@ pub async fn subscribe(
     // _request_span_gurad在‘subscribe'结束时析构，
     // 此时就'退出'了这个跨度，
     // 可以反复的进入和退出一个跨度。而关闭一个跨度是终结性的，即被析构时发生
+
+    //不用对跨度调用'.enter()'
+    //'.instrument'会在合适的时机，根据future的状态调用'.enter()'
+    let query_span = tracing::info_span!(
+        "Saving new subscriber details in the database."
+    );
     
-    tracing::info!(
-        "request_id {} - Adding '{}' '{}' as a new subscriber.",
-        request_id,
-        form.email,
-        form.name,
-    );
-    tracing::info!(
-        "request_id {} - Saving new subscriber details in the database",
-        request_id,
-    );
+
+    // Instrument是一个用于扩展future的trait,
+    // 以跨度为参数，future被轮询时，进入该跨度
+    // future被挂起时，退出该跨度。
     match sqlx::query!(
         r#"
         INSERT INTO subscriptions (id, email, name, subscribed_at)
@@ -59,21 +60,14 @@ pub async fn subscribe(
         Utc::now(),
     )
     .execute(pool.get_ref())
+    .instrument(query_span)
     .await
     {
         Ok(_) => {
-            tracing::info!(
-                "request_id {} - New subscriber details have been saved",
-                request_id,
-            );
             HttpResponse::Ok().finish()
-        }
+        },
         Err(e) => {
-            tracing::error!(
-                "request_id {} - Failed to execute query: {:?}",
-                request_id,
-                 e,
-        );
+            tracing::error!("Failed to execute query: {:?}", e);
             HttpResponse::InternalServerError().finish()
         }
     }
