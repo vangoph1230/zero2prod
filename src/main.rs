@@ -1,10 +1,9 @@
+//! src/lib.rs
 use zero2prod::configuration::get_configuration;
 use zero2prod::startup::run;
-use sqlx::PgPool;
+use zero2prod::telemetry::{get_subscriber, init_subscriber};
+use sqlx::postgres::PgPool;
 use std::net::TcpListener;
-use tracing::subscriber::set_global_default;
-use tracing_bunyan_formatter::{JsonStorageLayer, BunyanFormattingLayer};
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 /// tracing crate 提供了核心APi与抽象，其中提供了 Subsciber trait；
 ///     - tracing中的Subscriber trait 与log的Log trait 类似；
@@ -17,26 +16,8 @@ use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    // 层的实例，即某种小功能
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| 
-            EnvFilter::new("info")
-        );
-    // 层的实例，即某种小功能
-    let formatting_layer = BunyanFormattingLayer::new(
-        "zero2prod".into(), 
-        std::io::stdout,
-    );
- 
-    // 初始化 订阅器实例，并向其添加 层次的小功能
-    let subscriber = Registry::default()
-        .with(env_filter)
-        .with(JsonStorageLayer)
-        .with(formatting_layer);
-
-    // 设置为整个程序生命周期内的全局默认订阅者，但库中慎用，防止第二次初始化
-    set_global_default(subscriber).expect("Failed to set subscriber");
-
+    let subscriber = get_subscriber("zero2prod".into(), "info".into());
+    init_subscriber(subscriber);
 
     let configuration = get_configuration().expect("Failed to read configuration.");
     let connection_pool = PgPool::connect(&configuration.database.connection_string())
@@ -44,5 +25,6 @@ async fn main() -> std::io::Result<()> {
         .expect("Failed to connect to Postgres.");
     let address = format!("127.0.0.1:{}", configuration.application_port);
     let listener = TcpListener::bind(address)?;
-    run(listener, connection_pool)?.await
+    run(listener, connection_pool)?.await?;
+    Ok(())
 }
