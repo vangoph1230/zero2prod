@@ -21,8 +21,11 @@ async fn main() -> std::io::Result<()> {
     init_subscriber(subscriber);
 
     let configuration = get_configuration().expect("Failed to read configuration.");
-    let connection_pool = PgPool::connect(&configuration.database.connection_string().expose_secret())
-        .await
+    // connect_lazy不再是异步，因为实际上并没有尝试建立连接，
+    // 它只会在首次使用连接池时尝试建立连接
+    let connection_pool = PgPool::connect_lazy(
+            &configuration.database.connection_string().expose_secret()
+        )
         .expect("Failed to connect to Postgres.");
     let address = format!("127.0.0.1:{}", configuration.application_port);
     let listener = TcpListener::bind(address)?;

@@ -29,13 +29,15 @@ secrecy = { version = "0.8", features = ["serde"]}
 
 [dependencies.sqlx]
 version = "0.6"
+default-features =  false
 features = [
     "runtime-actix-rustls",
     "macros",
     "postgres",
     "uuid",
     "chrono",
-    "migrate"
+    "migrate",
+    "offline",
 ]
 
 [dev-dependencies]
