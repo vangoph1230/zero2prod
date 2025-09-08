@@ -1,4 +1,3 @@
-use unicode_segmentation::UnicodeSegmentation;
 use validator::validate_email;
 
 #[derive(Debug)]
@@ -23,7 +22,7 @@ impl AsRef<str> for SubscriberEmail {
 #[cfg(test)]
 mod tests {
     use super::SubscriberEmail;
-    use claim::{assert_err, assert_ok};
+    use claim::assert_err;
     use fake::faker::internet::en::SafeEmail;
     use fake::Fake;
 
@@ -45,9 +44,20 @@ mod tests {
         assert_err!(SubscriberEmail::parse(email));
     }
 
-    #[test]
-    fn valid_emails_are_parsed_successfully() {
-        let email = SafeEmail().fake();
-        claim::assert_ok!(SubscriberEmail::parse(email));
+
+    #[derive(Debug, Clone)]
+    struct ValidEmailFixture(pub String);
+
+    impl quickcheck::Arbitrary for ValidEmailFixture {
+        fn arbitrary<G: quickcheck::Gen>(g: &mut G) -> Self {
+            let email = SafeEmail().fake_with_rng(g);
+            Self(email)
+        }
+    }
+
+    #[quickcheck_macros::quickcheck]
+    fn valid_emails_are_parsed_successfully(valid_email: ValidEmailFixture) -> bool {
+        dbg!(&valid_email.0);
+        SubscriberEmail::parse(valid_email.0).is_ok()
     }
 }
