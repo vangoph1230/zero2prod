@@ -1,4 +1,4 @@
-use actix_web::{web, HttpResponse};
+use actix_web::{cookie::time::format_description::parse, web, HttpResponse};
 use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -25,19 +25,10 @@ pub async fn subscribe(
     form: web::Form<FormData>,
     pool: web::Data<PgPool>,
 ) -> HttpResponse {
-    let name = match SubscriberName::parse(form.0.name) {
-        Ok(name) => name,
+    let new_subscriber = match form.0.try_into() {
+        Ok(subscriber) => subscriber,
         Err(_) => return HttpResponse::BadRequest().finish(),
     };
-    let email = match SubscriberEmail::parse(form.0.email) {
-        Ok(email) => email,
-        Err(_) => return HttpResponse::BadRequest().finish(),
-    };
-    let new_subscriber = NewSubscriber {
-        email,
-        name,
-    };
-
     match insert_subscriber(&pool, &new_subscriber).await {
         Ok(_) => HttpResponse::Ok().finish(),
         Err(_) => HttpResponse::InternalServerError().finish(),
@@ -73,10 +64,26 @@ pub async fn insert_subscriber(
 }
 
 pub fn is_valid_name(s: &str) -> bool {
-    let is_empty_or_whitespace = s.trim().is_empty();
-    let is_too_long = s.graphemes(true).count() > 256;
-    let forbiden_characters = ['/', '(', ')', ',', '"', '<', '>', '\\', '{', '}'];
-    let contains_forbidden_characters = s.chars().any(|g| forbiden_characters.contains(&g));
+        let is_empty_or_whitespace = s.trim().is_empty();
+        let is_too_long = s.graphemes(true).count() > 256;
+        let forbiden_characters = ['/', '(', ')', ',', '"', '<', '>', '\\', '{', '}'];
+        let contains_forbidden_characters = s.chars().any(|g| forbiden_characters.contains(&g));
 
     !(is_empty_or_whitespace || is_too_long || contains_forbidden_characters)
+}
+
+/// 正确解析出表单中的name、email信息
+pub fn parse_subscriber(form: FormData) -> Result<NewSubscriber, String> {
+        let name = SubscriberName::parse(form.name)?;
+        let email = SubscriberEmail::parse(form.email)?;
+        Ok(NewSubscriber {name, email})
+}
+
+impl TryFrom<FormData> for NewSubscriber {
+    type Error = String;
+    fn try_from(form: FormData) -> Result<Self, Self::Error> {
+        let name = SubscriberName::parse(form.name)?;
+        let email = SubscriberEmail::parse(form.email)?;
+        Ok(Self { email, name})
+    }
 }
