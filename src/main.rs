@@ -3,7 +3,7 @@ use secrecy::ExposeSecret;
 use zero2prod::configuration::get_configuration;
 use zero2prod::startup::run;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
-use sqlx::postgres::PgPool;
+use sqlx::postgres::{PgPool, PgPoolOptions};
 use std::net::TcpListener;
 
 /// tracing crate 提供了核心APi与抽象，其中提供了 Subsciber trait；
@@ -23,7 +23,9 @@ async fn main() -> std::io::Result<()> {
     let configuration = get_configuration().expect("Failed to read configuration.");
     // connect_lazy不再是异步，因为实际上并没有尝试建立连接，
     // 它只会在首次使用连接池时尝试建立连接
-    let connection_pool = PgPool::connect_lazy(
+    let connection_pool = PgPoolOptions::new()
+        .acquire_timeout(std::time::Duration::from_secs(2))
+        .connect_lazy(
             &configuration.database.connection_string().expose_secret()
         )
         .expect("Failed to connect to Postgres.");
