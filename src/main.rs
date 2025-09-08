@@ -25,10 +25,10 @@ async fn main() -> std::io::Result<()> {
     // 它只会在首次使用连接池时尝试建立连接
     let connection_pool = PgPoolOptions::new()
         .acquire_timeout(std::time::Duration::from_secs(2))
-        .connect_lazy(
-            &configuration.database.connection_string().expose_secret()
-        )
-        .expect("Failed to connect to Postgres.");
+        // connect_lazy替换为 connect_lazy_with
+        .connect_lazy_with(
+            configuration.database.with_db()
+        );
     let address = format!(
         "{}:{}", 
         configuration.application.host,

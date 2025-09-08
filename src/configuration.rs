@@ -1,6 +1,7 @@
 //! src/configuration.rs
 use secrecy::{ExposeSecret, Secret};
 use serde_aux::field_attributes::deserialize_number_from_string;
+use sqlx::postgres::PgConnectOptions;
 
 #[derive(serde::Deserialize)]
 pub struct Settings {
@@ -53,6 +54,23 @@ impl TryFrom<String> for Environment {
     }
 }
 
+impl DatabaseSettings {
+
+    /// 返回 缺少数据库名 的数据库连接的配置
+    pub fn without_db(&self) -> PgConnectOptions {
+       PgConnectOptions::new()
+        .host(&self.host)
+        .username(&self.username)
+        .password(&self.password.expose_secret())
+        .port(self.port)
+    }
+
+    /// 构建完整的Postgres数据库连接的配置
+    pub fn with_db(&self) -> PgConnectOptions {
+        self.without_db().database(&self.database_name)
+    }
+}
+
 pub fn get_configuration() -> Result<Settings, config::ConfigError> {
     let base_path = std::env::current_dir().expect("Failed to detemine the current directory");
     let configuration_directory = base_path.join("configuration");
@@ -72,33 +90,4 @@ pub fn get_configuration() -> Result<Settings, config::ConfigError> {
         )
         .build()?;
     settings.try_deserialize::<Settings>()
-}
-
-impl DatabaseSettings {
-
-    /// 构建完整的Postgres数据库连接字符串
-    pub fn connection_string(&self) -> Secret<String> {
-        Secret::new(format!(
-            "postgres://{}:{}@{}:{}/{}",
-            self.username,
-            self.password.expose_secret(),
-            self.host,
-            self.port,
-            self.database_name,
-            )
-        )
-    }
-
-    /// 返回 缺少数据库名 的数据库连接字符串
-    pub fn connection_string_without_db(&self) -> Secret<String> {
-        Secret::new(format!(
-            "postgres://{}:{}@{}:{}",
-            self.username,
-            self.password.expose_secret(),
-            self.host,
-            self.port,
-            )
-        )
-    }
-    
 }
