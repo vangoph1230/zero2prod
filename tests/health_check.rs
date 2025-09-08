@@ -1,8 +1,4 @@
-use actix_web::test;
-use reqwest::Client;
-use secrecy::ExposeSecret;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
-use tracing::subscriber;
 use uuid::Uuid;
 use zero2prod::configuration::{DatabaseSettings, get_configuration};
 use zero2prod::startup::run;
@@ -165,7 +161,7 @@ async fn subscribe_returns_a_200_when_fields_are_present_but_empty() {
             .expect("Failed to execute request.");
 
         assert_eq!(
-            200,
+            400,
             response.status().as_u16(),
             "The API did not return a 200 Ok when the payload was {}",
             description

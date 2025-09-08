@@ -1,4 +1,3 @@
-use tracing::Subscriber;
 use unicode_segmentation::UnicodeSegmentation;
 
 pub struct SubscriberName(String);
@@ -19,6 +18,12 @@ impl SubscriberName {
     }
 
     pub fn inner_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for SubscriberName {
+    fn as_ref(&self) -> &str {
         &self.0
     }
 }
