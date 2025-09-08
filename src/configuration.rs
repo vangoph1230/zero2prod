@@ -2,6 +2,8 @@
 use secrecy::{ExposeSecret, Secret};
 use serde_aux::field_attributes::deserialize_number_from_string;
 use sqlx::postgres::PgConnectOptions;
+use sqlx::postgres::PgSslMode;
+use sqlx::ConnectOptions;
 
 #[derive(serde::Deserialize)]
 pub struct Settings {
@@ -17,6 +19,7 @@ pub struct DatabaseSettings {
     pub port: u16,
     pub host: String,
     pub database_name: String,
+    pub require_ssl: bool,
 }
 
 #[derive(serde::Deserialize)]
@@ -58,16 +61,27 @@ impl DatabaseSettings {
 
     /// 返回 缺少数据库名 的数据库连接的配置
     pub fn without_db(&self) -> PgConnectOptions {
-       PgConnectOptions::new()
-        .host(&self.host)
-        .username(&self.username)
-        .password(&self.password.expose_secret())
-        .port(self.port)
+        let ssl_mode = if self.require_ssl {
+            // 仅尝试 SSL 连接
+            PgSslMode::Require
+        } else {
+            // 尝试加密连接，如果失败，则会退回到未加密的连接
+            PgSslMode::Prefer
+        };
+
+        PgConnectOptions::new()
+            .host(&self.host)
+            .username(&self.username)
+            .password(&self.password.expose_secret())
+            .port(self.port)
+            .ssl_mode(ssl_mode)
     }
 
     /// 构建完整的Postgres数据库连接的配置
     pub fn with_db(&self) -> PgConnectOptions {
-        self.without_db().database(&self.database_name)
+        let mut options = self.without_db().database(&self.database_name);
+        options.log_statements(tracing::log::LevelFilter::Trace);
+        options
     }
 }
 
