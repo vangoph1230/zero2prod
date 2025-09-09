@@ -28,7 +28,7 @@ pub struct TestApp {
 }
 
 /// 服务器的端口由Os随机分配
-async fn spawn_app() -> TestApp {
+pub async fn spawn_app() -> TestApp {
     // 只在第一次使用'TRACING'时调用initialize，其他时候都会直接跳过
     Lazy::force(&TRACING);
 
@@ -65,7 +65,7 @@ async fn spawn_app() -> TestApp {
 /// - 第二：PgConnection根据Uuid::new_v4()的随机值 创建一个唯一新名字的数据库连接（完整的数据库连接字符串），
 /// - 第三：根据PgConnection创建数据库连接池（PgPool),
 /// - 第四：在连接池上运行数据库迁移。
-pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
+async fn configure_database(config: &DatabaseSettings) -> PgPool {
     let mut connection = PgConnection::connect_with(&config.without_db())
         .await
         .expect("Failed to connect to Postgres");
@@ -83,99 +83,4 @@ pub async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .await
         .expect("Failed to migrate the database");
     connection_pool
-}
-
-#[tokio::test]
-async fn health_check_works() {
-    let app = spawn_app().await;
-    let client = reqwest::Client::new();
-
-    let response = client
-        .get(&format!("{}/health_check", &app.address))
-        .send()
-        .await
-        .expect("Failed to execute request.");
-
-    assert!(response.status().is_success());
-    assert_eq!(Some(0), response.content_length());
-}
-
-#[tokio::test]
-async fn subscribe_returns_a_200_for_valid_form_data() {
-    let app = spawn_app().await;
-    let client = reqwest::Client::new();
-
-    let body = "name=le%20guin&email=ursula_le_guin%40gmail.com";
-    let response = client
-        .post(&format!("{}/subscriptions", &app.address))
-        .header("Content-Type", "application/x-www-form-urlencoded")
-        .body(body)
-        .send()
-        .await
-        .expect("Failed to execute request.");
-
-    assert_eq!(200, response.status().as_u16());
-
-    let saved = sqlx::query!("SELECT email, name FROM subscriptions",)
-            .fetch_one(&app.db_pool)
-            .await
-            .expect("Failed to saved subscription.");
-    assert_eq!(saved.email, "ursula_le_guin@gmail.com");
-    assert_eq!(saved.name, "le guin");
-}
-
-#[tokio::test]
-async fn subscribe_returns_a_400_when_data_is_missing() {
-    let app = spawn_app().await;
-    let client = reqwest::Client::new();
-    let test_cases = vec![
-        ("name=le%20gui", "missing the email"),
-        ("email=ursula_le_guin%40gmail.com", "missing the name"),
-        ("", "missing both name and email")
-    ];
-
-    for (invalid_body, error_message) in test_cases {
-        let response = client
-            .post(&format!("{}/subscriptions", &app.address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(invalid_body)
-            .send()
-            .await
-            .expect("Failed to execute request.");
-
-        assert_eq!(
-            400,
-            response.status().as_u16(),
-            "The API did not fail with 400 Bad Request when the payload was {}.",
-            error_message,
-        )
-    }
-}
-
-#[tokio::test]
-async fn subscribe_returns_a_400_when_fields_are_present_but_empty() {
-    let app = spawn_app().await;
-    let client = reqwest::Client::new();
-    let test_cases = vec![
-        ("name=&email=ursula_le_guin%40gmail.com", "empty name"),
-        ("name=Ursula&email=", "empty email"),
-        ("name=Ursula&email=definitely-not-an-email", "invalid emnail"),
-    ];
-
-    for (body, description) in test_cases {
-        let response = client
-            .post(format!("{}/subscriptions", app.address))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .body(body)
-            .send()
-            .await
-            .expect("Failed to execute request.");
-
-        assert_eq!(
-            400,
-            response.status().as_u16(),
-            "The API did not return a 200 Ok when the payload was {}",
-            description
-        );
-    }
 }
