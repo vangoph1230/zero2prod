@@ -1,5 +1,4 @@
 //! src/lib.rs
-use secrecy::Secret;
 use zero2prod::configuration::get_configuration;
 use zero2prod::email_client::EmailClient;
 use zero2prod::startup::run;
