@@ -1,4 +1,5 @@
 //! src/lib.rs
+use secrecy::Secret;
 use zero2prod::configuration::get_configuration;
 use zero2prod::email_client::EmailClient;
 use zero2prod::startup::run;
@@ -33,7 +34,8 @@ async fn main() -> std::io::Result<()> {
         .expect("Invalid sender email address.");
     let email_client = EmailClient::new(
         configuration.email_client.base_url,
-        sender_email
+        sender_email,
+        configuration.email_client.authorization_token,
     );
 
     let address = format!(
