@@ -1,3 +1,4 @@
+use crate::email_client::EmailClient;
 use crate::routes::{health_check, subscribe};
 use actix_web::dev::Server;
 use actix_web::{web, App, HttpServer};
@@ -9,8 +10,10 @@ use tracing_actix_web::TracingLogger;
 pub fn run(
     listener: TcpListener,
     db_pool: PgPool,
+    email_client: EmailClient,
 ) -> Result<Server, std::io::Error> {
     let db_pool = web::Data::new(db_pool);
+    let email_client = web::Data::new(email_client);
 
     // TracingLogger一个专门为 actix-web 框架设计的中间件,基于tracing而非log实现,
     // 能自带request_id等跨度信息，使用其代替 actix-web::Logger,
@@ -21,6 +24,7 @@ pub fn run(
                 .route("/health_check", web::get().to(health_check))
                 .route("/subscriptions", web::post().to(subscribe))
                 .app_data(db_pool.clone())
+                .app_data(email_client.clone())
     })
     .listen(listener)?
     .run();

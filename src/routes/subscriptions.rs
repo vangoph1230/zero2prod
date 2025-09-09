@@ -1,4 +1,4 @@
-use actix_web::{cookie::time::format_description::parse, web, HttpResponse};
+use actix_web::{web, HttpResponse};
 use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
