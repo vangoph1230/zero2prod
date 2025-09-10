@@ -3,6 +3,7 @@ use uuid::Uuid;
 use zero2prod::configuration::{DatabaseSettings, get_configuration};
 use zero2prod::email_client::EmailClient;
 use zero2prod::startup::run;
+use zero2prod::startup::{build, get_connection_pool};
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use std::net::TcpListener;
 use once_cell::sync::Lazy;
@@ -30,6 +31,7 @@ pub struct TestApp {
 /// 服务器的端口由Os随机分配
 pub async fn spawn_app() -> TestApp {
     // 只在第一次使用'TRACING'时调用initialize，其他时候都会直接跳过
+    // 当第一次调用initialize时将执行'TRACING'中的代码
     Lazy::force(&TRACING);
 
     let listener = TcpListener::bind("127.0.0.1:0")
@@ -41,7 +43,9 @@ pub async fn spawn_app() -> TestApp {
     configuration.database.database_name = Uuid::new_v4().to_string();
     let connection_pool = configure_database(&configuration.database).await;
 
-    let sender_email = configuration.email_client.sender()
+    let sender_email = configuration
+        .email_client
+        .sender()
         .expect("Invalid sender email address.");
     let timeout = configuration.email_client.timeout();
     let email_client = EmailClient::new(
