@@ -105,6 +105,9 @@ impl DatabaseSettings {
     }
 }
 
+/// 获取应用程序启动时的配置信息
+/// - 从文件中获取配置
+/// - 从环境变量中获取配置
 pub fn get_configuration() -> Result<Settings, config::ConfigError> {
     let base_path = std::env::current_dir().expect("Failed to detemine the current directory");
     let configuration_directory = base_path.join("configuration");

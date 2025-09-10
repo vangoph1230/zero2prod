@@ -17,6 +17,7 @@ pub struct Application {
 
 impl Application {
 
+    /// 根据配置信息初始化/配置应用程序
     pub async fn build(configuration: Settings) -> Result<Self, std::io::Error> {
         let connection_pool = get_connection_pool(&configuration.database);
 
@@ -52,6 +53,7 @@ impl Application {
         self.port
     }
 
+    // 运行应用程序
     pub async fn run_until_stopped(self) -> Result<(), std::io::Error> {
         self.server.await
     }

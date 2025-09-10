@@ -4,7 +4,7 @@ use tracing_subscriber::fmt::MakeWriter;
 use tracing_log::LogTracer;
 use tracing_bunyan_formatter::{JsonStorageLayer, BunyanFormattingLayer};
 
-/// 获取tracing-subscriber中的注册表
+/// 获取tracing-subscriber中的注册表类型
 /// - std::io:stdout 输出到终端，即日志可见，输出到屏幕
 /// - std::io::sink 输出到空设备，即日志被丢弃，不可见
 pub fn get_subscriber<Sink>(
