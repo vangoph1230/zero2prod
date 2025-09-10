@@ -1,10 +1,7 @@
 //! src/lib.rs
 use zero2prod::configuration::get_configuration;
-use zero2prod::email_client::EmailClient;
-use zero2prod::startup::run;
+use zero2prod::startup::Application;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
-use sqlx::postgres::PgPoolOptions;
-use std::net::TcpListener;
 
 /// tracing crate 提供了核心APi与抽象，其中提供了 Subsciber trait；
 ///     - tracing中的Subscriber trait 与log的Log trait 类似；
@@ -21,30 +18,8 @@ async fn main() -> std::io::Result<()> {
     init_subscriber(subscriber);
 
     let configuration = get_configuration().expect("Failed to read configuration.");
-    // connect_lazy不再是异步，因为实际上并没有尝试建立连接，
-    // 它只会在首次使用连接池时尝试建立连接
-    let connection_pool = PgPoolOptions::new()
-        .acquire_timeout(std::time::Duration::from_secs(2))
-        // connect_lazy替换为 connect_lazy_with
-        .connect_lazy_with(
-            configuration.database.with_db()
-        );
-    let sender_email = configuration.email_client.sender()
-        .expect("Invalid sender email address.");
-    let timeout = configuration.email_client.timeout();
-    let email_client = EmailClient::new(
-        configuration.email_client.base_url,
-        sender_email,
-        configuration.email_client.authorization_token,
-       timeout,
-    );
 
-    let address = format!(
-        "{}:{}", 
-        configuration.application.host,
-        configuration.application.port,
-    );
-    let listener = TcpListener::bind(address)?;
-    run(listener, connection_pool, email_client)?.await?;
+    let application = Application::build(configuration).await.unwrap();
+    application.run_until_stopped().await?;
     Ok(())
 }

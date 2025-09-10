@@ -1,11 +1,9 @@
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
-use zero2prod::configuration::{DatabaseSettings, get_configuration};
-use zero2prod::email_client::EmailClient;
-use zero2prod::startup::run;
-use zero2prod::startup::{build, get_connection_pool};
+use zero2prod::configuration::{get_configuration, DatabaseSettings};
+use zero2prod::startup::get_connection_pool;
+use zero2prod::startup::Application;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
-use std::net::TcpListener;
 use once_cell::sync::Lazy;
 
 
@@ -30,38 +28,28 @@ pub struct TestApp {
 
 /// 服务器的端口由Os随机分配
 pub async fn spawn_app() -> TestApp {
-    // 只在第一次使用'TRACING'时调用initialize，其他时候都会直接跳过
-    // 当第一次调用initialize时将执行'TRACING'中的代码
-    Lazy::force(&TRACING);
+   Lazy::force(&TRACING);
 
-    let listener = TcpListener::bind("127.0.0.1:0")
-        .expect("Faild to bind random port");
-    let port = listener.local_addr().unwrap().port();
-    let address = format!("http://127.0.0.1:{}", port);
+   let configuration = {
+    let mut c = get_configuration().expect("Failed to read configuration.");
+    c.database.database_name = Uuid::new_v4().to_string();
+    c.application.port = 0;
+    c
+   };
 
-    let mut configuration = get_configuration().expect("Failed to read configuration.");
-    configuration.database.database_name = Uuid::new_v4().to_string();
-    let connection_pool = configure_database(&configuration.database).await;
+   configure_database(&configuration.database).await;
 
-    let sender_email = configuration
-        .email_client
-        .sender()
-        .expect("Invalid sender email address.");
-    let timeout = configuration.email_client.timeout();
-    let email_client = EmailClient::new(
-        configuration.email_client.base_url,
-        sender_email,
-        configuration.email_client.authorization_token,
-        timeout,
-    );
+   let application = Application::build(configuration.clone())
+    .await
+    .expect("Failed to build application.");
+   let address = format!("http://127.0.0.1:{}", application.port());
+   let _ = tokio::spawn(application.run_until_stopped());
 
-    let server = run(listener, connection_pool.clone(), email_client)
-        .expect("Failed to bind Address");
-    let _ = tokio::spawn(server);
-    TestApp {
-        address,
-        db_pool: connection_pool,
-    }
+   TestApp {
+    address,
+    db_pool: get_connection_pool(&configuration.database),
+   }
+
 }
 
 /// 在与关系型数据库交互的测试中，为每个集成测试都启动一个全新的逻辑数据库，确保测试隔离：
