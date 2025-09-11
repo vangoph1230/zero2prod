@@ -42,7 +42,7 @@ impl TestApp {
     
 }
 
-/// 服务器的端口由Os随机分配
+/// 服务器的端口由Os随机分配,初始化应用配置，初始化数据库配置，启动服务
 pub async fn spawn_app() -> TestApp {
     Lazy::force(&TRACING);
     let email_server = MockServer::start().await;
