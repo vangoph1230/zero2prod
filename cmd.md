@@ -106,3 +106,7 @@ cargo t subscribe_fails_if_there_is_a_fatal_database_error | bunyan
 enabled: 这个值表示 “启用测试日志输出”,这三条命令组合在一起,测试运行时的所有日志都能被显示出来
 日志中exception.details和exception.message记录底层的根本原因
 ------------------------------------------------------------------------------------------------------------------------------
+8.2.1 跟踪错误的根本原因(日志中exception.details和exception.message，记录的错误日志简洁而深入); "孤儿规则":对于外来的类型，不允许实现一个外来的trait；
+Debug trait应当提供一种对开发者友好的格式，尽可能将类型结构表达出来，几乎所有被设置为公开的类型都应该实现Debug,而Dispaly trait则相反，
+它应当提供一种对用户友好的格式，大部分类型都不会实现Display,且不能通过#[derive(Display)]宏来自动实现；
+'?'操作符帮我们自动调用'Into' trait,这样无须显示的调用'map_err'方法；
