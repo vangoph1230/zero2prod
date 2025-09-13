@@ -187,8 +187,14 @@ async fn store_token(
 }
 
 
-#[derive(Debug)]
 pub struct StoreTokenError(sqlx::Error);
+
+impl std::fmt::Debug for StoreTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // 遍历错误传播链
+        error_chain_fmt(self, f)
+    }
+}
 
 impl std::fmt::Display for StoreTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -200,6 +206,26 @@ impl std::fmt::Display for StoreTokenError {
     }
 }
 
-impl ResponseError for StoreTokenError {
-    
+
+impl std::error::Error for StoreTokenError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        // 编译器将'&sqlx::Error'隐式转换为'&dyn Error'
+        Some(&self.0)
+    }
+}
+
+impl ResponseError for StoreTokenError {}
+
+fn error_chain_fmt(
+    e: &impl std::error::Error,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    writeln!(f, "{}\n", e)?;
+    let mut current = e.source();
+    while let Some(case) = current {
+        writeln!(f, "Caused by:\n\t{}", case)?;
+        // 遍历错误传播链，直到打印出底层错误
+        current = case.source();
+    }
+    Ok(())
 }
