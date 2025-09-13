@@ -29,7 +29,7 @@ pub async fn subscribe(
     pool: web::Data<PgPool>,
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
-) -> Result<HttpResponse, actix_web::Error> {
+) -> Result<HttpResponse, SubscriberError> {
     let new_subscriber = match form.0.try_into() {
         Ok(form) => form,
         Err(_) => return Ok(HttpResponse::BadRequest().finish()),
@@ -189,9 +189,6 @@ async fn store_token(
 
 pub struct StoreTokenError(sqlx::Error);
 
-/// 为StoreTokenError可转换为actix_web::Error提供支持
-impl ResponseError for StoreTokenError {}
-
 /// StoreTokenError为了实现ResponseError trait 必要条件
 impl std::fmt::Debug for StoreTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -234,3 +231,19 @@ fn error_chain_fmt(
     }
     Ok(())
 }
+
+#[derive(Debug)]
+struct SubscriberError {}
+
+impl std::fmt::Display for SubscriberError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Failed to create a new subscriber."
+        )
+    }
+}
+
+impl std::error::Error for SubscriberError {}
+
+impl ResponseError for SubscriberError {}
