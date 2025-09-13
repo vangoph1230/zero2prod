@@ -3,6 +3,7 @@ use actix_web::ResponseError;
 use chrono::Utc;
 use rand::{thread_rng, Rng};
 use rand::distributions::Alphanumeric;
+use reqwest::StatusCode;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 use unicode_segmentation::UnicodeSegmentation;
@@ -30,36 +31,21 @@ pub async fn subscribe(
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, SubscriberError> {
-    let new_subscriber = match form.0.try_into() {
-        Ok(form) => form,
-        Err(_) => return Ok(HttpResponse::BadRequest().finish()),
-    };
-    let mut transaction = match pool.begin().await {
-        Ok(transaction) => transaction,
-        Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
-    };
-
-    let subscriber_id = match insert_subscriber(&mut transaction, &new_subscriber).await {
-        Ok(subscriber_id) => subscriber_id,
-        Err(_) => return Ok(HttpResponse::InternalServerError().finish()),
-    };
+    let new_subscriber = form.0.try_into()?;
+    let mut transaction = pool.begin().await?;
+    let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber).await?;
 
     let subscription_token = generate_subscription_token();
     // '?'操作符帮我们自动调用'Into' trait,这样无须显示的调用'map_err'方法
     store_token(&mut transaction, subscriber_id, &subscription_token).await?;
-    if transaction.commit().await.is_err() {
-        return Ok(HttpResponse::InternalServerError().finish());
-    }
-    if send_confirmation_email(
+    transaction.commit().await?;
+    send_confirmation_email(
         &email_client, 
         new_subscriber,
         &base_url.0,
         &subscription_token,
     )
-    .await
-    .is_err() {
-        return Ok(HttpResponse::InternalServerError().finish());
-    }
+    .await?;
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -233,7 +219,23 @@ fn error_chain_fmt(
 }
 
 #[derive(Debug)]
-struct SubscriberError {}
+pub enum SubscriberError {
+    ValidationError(String),
+    DataBaseError(sqlx::Error),
+    StoreTokenError(StoreTokenError),
+    SendEmailError(reqwest::Error),
+}
+
+impl ResponseError for SubscriberError {
+    fn status_code(&self) -> reqwest::StatusCode {
+        match self {
+            SubscriberError::ValidationError(_) => StatusCode::BAD_REQUEST,
+            SubscriberError::DataBaseError(_)
+            | SubscriberError::StoreTokenError(_)
+            | SubscriberError::SendEmailError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
 
 impl std::fmt::Display for SubscriberError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -244,6 +246,32 @@ impl std::fmt::Display for SubscriberError {
     }
 }
 
-impl std::error::Error for SubscriberError {}
+// SendEmailError(reqwest::Error)变体实现From trait
+impl From<reqwest::Error> for SubscriberError {
+    fn from(e: reqwest::Error) -> Self {
+        Self::SendEmailError(e)
+    }
+}
 
-impl ResponseError for SubscriberError {}
+// StoreTokenError(StoreTokenError)变体实现From trait
+impl From<StoreTokenError> for SubscriberError {
+    fn from(e: StoreTokenError) -> Self {
+        Self::StoreTokenError(e)
+    }
+}
+
+// DataBaseError(sqlx::Error)变体实现From trait
+impl From<sqlx::Error> for SubscriberError {
+    fn from(e: sqlx::Error) -> Self {
+        Self::DataBaseError(e)
+    }
+}
+
+// ValidationError(String)变体实现From trait
+impl From<String> for SubscriberError {
+    fn from(e: String) -> Self {
+        Self::ValidationError(e)
+    }
+}
+
+impl std::error::Error for SubscriberError {}
