@@ -189,6 +189,10 @@ async fn store_token(
 
 pub struct StoreTokenError(sqlx::Error);
 
+/// 为StoreTokenError可转换为actix_web::Error提供支持
+impl ResponseError for StoreTokenError {}
+
+/// StoreTokenError为了实现ResponseError trait 必要条件
 impl std::fmt::Debug for StoreTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // 遍历错误传播链
@@ -196,6 +200,7 @@ impl std::fmt::Debug for StoreTokenError {
     }
 }
 
+/// StoreTokenError为了实现ResponseError trait 必要条件
 impl std::fmt::Display for StoreTokenError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
@@ -206,7 +211,7 @@ impl std::fmt::Display for StoreTokenError {
     }
 }
 
-
+/// StoreTokenError为使用error_chain_fmt()函数，才实现Error trait,
 impl std::error::Error for StoreTokenError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         // 编译器将'&sqlx::Error'隐式转换为'&dyn Error'
@@ -214,8 +219,8 @@ impl std::error::Error for StoreTokenError {
     }
 }
 
-impl ResponseError for StoreTokenError {}
-
+/// 为所有实现了std::error::Error trait的任何类型
+/// 提供类似、统一的表示格式；
 fn error_chain_fmt(
     e: &impl std::error::Error,
     f: &mut std::fmt::Formatter<'_>,
