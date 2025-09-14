@@ -31,7 +31,9 @@ pub async fn subscribe(
     email_client: web::Data<EmailClient>,
     base_url: web::Data<ApplicationBaseUrl>,
 ) -> Result<HttpResponse, SubscriberError> {
-    let new_subscriber = form.0.try_into()?;
+    let new_subscriber = form.0
+        .try_into()
+        .map_err(SubscriberError::ValidationError)?;
     let mut transaction = pool.begin()
         .await
         .map_err(SubscriberError::PoolError)?;
@@ -180,15 +182,7 @@ async fn store_token(
 }
 
 
-pub struct StoreTokenError(sqlx::Error);
 
-/// StoreTokenError为了实现ResponseError trait 必要条件
-impl std::fmt::Debug for StoreTokenError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // 遍历错误传播链
-        error_chain_fmt(self, f)
-    }
-}
 
 /// StoreTokenError为了实现ResponseError trait 必要条件
 impl std::fmt::Display for StoreTokenError {
@@ -201,6 +195,17 @@ impl std::fmt::Display for StoreTokenError {
     }
 }
 
+
+pub struct StoreTokenError(sqlx::Error);
+
+/// StoreTokenError为了实现ResponseError trait 必要条件
+impl std::fmt::Debug for StoreTokenError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // 遍历错误传播链
+        error_chain_fmt(self, f)
+    }
+}
+
 /// StoreTokenError为使用error_chain_fmt()函数，才实现Error trait,
 impl std::error::Error for StoreTokenError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
@@ -208,6 +213,7 @@ impl std::error::Error for StoreTokenError {
         Some(&self.0)
     }
 }
+
 
 /// 为所有实现了std::error::Error trait的任何类型
 /// 提供类似、统一的表示格式；
@@ -225,13 +231,26 @@ fn error_chain_fmt(
     Ok(())
 }
 
+#[derive(thiserror::Error)]
 pub enum SubscriberError {
+    #[error("{0}")]
     ValidationError(String),
-    StoreTokenError(StoreTokenError),
-    SendEmailError(reqwest::Error),
-    PoolError(sqlx::Error),
-    InsertSubscriberError(sqlx::Error),
-    TransactionCommitError(sqlx::Error),
+    #[error("Failed to acquire a Postgres connectiuon from the pool")]
+    PoolError(#[source] sqlx::Error),
+    #[error("Failed to insert new subscriber in the database.")]
+    InsertSubscriberError(#[source] sqlx::Error),
+    #[error("Failed to store the confirmation token for a new subscriber.")]
+    StoreTokenError(#[from] StoreTokenError),
+    #[error("Failed to commit SQL transaction to store a new subscriber.")]
+    TransactionCommitError(#[source] sqlx::Error),
+    #[error("Failed to send a confirmation email.")]
+    SendEmailError(#[from] reqwest::Error),
+}
+
+impl std::fmt::Debug for SubscriberError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
 }
 
 impl ResponseError for SubscriberError {
@@ -247,12 +266,9 @@ impl ResponseError for SubscriberError {
     }
 }
 
-impl std::fmt::Debug for SubscriberError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        error_chain_fmt(self, f)
-    }
-}
 
+
+/* 
 impl std::error::Error for SubscriberError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
@@ -293,17 +309,17 @@ impl std::fmt::Display for SubscriberError {
     }
 }
 
-// SendEmailError(reqwest::Error)变体实现From trait
-impl From<reqwest::Error> for SubscriberError {
-    fn from(e: reqwest::Error) -> Self {
-        Self::SendEmailError(e)
-    }
-}
-
 // StoreTokenError(StoreTokenError)变体实现From trait
 impl From<StoreTokenError> for SubscriberError {
     fn from(e: StoreTokenError) -> Self {
         Self::StoreTokenError(e)
+    }
+}
+
+// SendEmailError(reqwest::Error)变体实现From trait
+impl From<reqwest::Error> for SubscriberError {
+    fn from(e: reqwest::Error) -> Self {
+        Self::SendEmailError(e)
     }
 }
 
@@ -313,5 +329,9 @@ impl From<String> for SubscriberError {
         Self::ValidationError(e)
     }
 }
+
+*/
+
+
 
 
