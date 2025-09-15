@@ -36,6 +36,15 @@ pub struct ConfirmationLinks {
 
 impl TestApp {
 
+    pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
+        reqwest::Client::new()
+            .post(&format!("{}/newsletters", &self.address))
+            .json(&body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
     pub async fn post_subscriptions(&self, body: String) -> reqwest::Response {
         reqwest::Client::new()
             .post(&format!("{}/subscriptions", &self.address))
@@ -46,6 +55,7 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
+    /// 解析出 确认邮件中的 链接
     pub fn get_confirmation_links(
         &self,
         email_request: &wiremock::Request,

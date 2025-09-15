@@ -154,3 +154,6 @@ Error::source方法返回的错误根本原因；#[from]属性,自动为所处�
 9.2.2 关于wiremock::Mock，通过mount(),只要底层的MockServer启动并运行，我们所指定的行为就会一直有效，而使用mount_as_scoped(),我会得到一个
 守护对象，即MockGuard，它有一个Drop实现，当它超出范围时，wiremock会告诉底层的MockServer停止MockGuard遵守指定的mock行为，换句话说：MockGuard在最后
 不再向POST /email 返回200；当MockGuard被丢弃时，会立即检查对scoped mock的期望是否得到验证。
+------------------------------------------------------------------------------------------------------------------------------------------
+9.5-9.6 处理HTML表单，使用Content/Type的application/x-www-form-urlencoded,不受网页的表单约束，使用JSON,这个是构建REST API的一个常见选择；
+sqlx::query_as!()将检索到的行，映射到其第一个参数中指定的类型；
