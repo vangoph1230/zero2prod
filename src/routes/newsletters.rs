@@ -1,7 +1,6 @@
 use actix_web::{web, HttpResponse, ResponseError};
 use anyhow::Context;
 use sqlx::PgPool;
-use tracing::Subscriber;
 use crate::{email_client::EmailClient, routes::error_chain_fmt};
 use crate::domain::SubscriberEmail;
 use actix_web::http::StatusCode;
@@ -48,7 +47,7 @@ impl ResponseError for PublishError {
 )]
 async fn get_confirmed_subscribers(
     pool: &PgPool,
-) -> Result<Vec<ConfirmedSubscriber>, anyhow::Error> {
+) -> Result<Vec<Result<ConfirmedSubscriber, anyhow::Error>>, anyhow::Error> {
     struct Row {
         email: String,
     }
@@ -64,15 +63,9 @@ async fn get_confirmed_subscribers(
 
     let confirmed_subscribers = rows
         .into_iter()
-        .filter_map(|r| match SubscriberEmail::parse(r.email) {
-            Ok(email) => Some(ConfirmedSubscriber { email}),
-            Err(error) => {
-                tracing::warn!(
-                    "A confirmed subscriber is using an invalid email address.\n{}.",
-                    error,
-                );
-                None
-            }
+        .map(|r| match SubscriberEmail::parse(r.email) {
+            Ok(email) => Ok(ConfirmedSubscriber {email}),
+            Err(error) => Err(anyhow::anyhow!(error)),
         })
         .collect(); 
 
@@ -86,15 +79,34 @@ pub async fn publish_newsletter(
 ) -> Result<HttpResponse, PublishError> {
     let subscribers = get_confirmed_subscribers(&pool).await?;
     for subscriber in subscribers {
-        email_client.send_email(
-            subscriber.email, 
-            &body.title, 
-            &body.content.html,
-            &body.content.text,
-        ).await
-        .with_context(|| {
-            format!("Failed to send newsletter issue to {}", subscriber.email)
-        })?;
+        match subscriber {
+            Ok(subscriber) => {
+                email_client.send_email(
+                    &subscriber.email, 
+                    &body.title, 
+                    &body.content.html, 
+                    &body.content.text,
+                )
+                .await
+                .with_context(|| {
+                    format!(
+                        "Failed to send newsletter issue to {}",
+                        subscriber.email,
+                    )
+                })?;
+            }
+            Err(error) => {
+                tracing::warn!(
+                    // 将错误传播链作为一个结构化的自命名的字段记录在日志中
+                    // 字段命名：error.cause_chain
+                    // 调试格式：?error ,等价于std::fmt::Debug::fmt(&error, formatter)，其中error是变量名
+                    error.cause_chain = ?error,
+                    // 使用'\'将长字符串字面值分成两行，而不创建'\n'字符
+                    "Skipping a confirmed subscriber. \
+                    Their stored contact details are invalid",
+                );
+            }
+        }
     }
     Ok(HttpResponse::Ok().finish())
 }
