@@ -17,7 +17,7 @@ DB_PORT="${POSTGRES_PORT:=5432}"
 
 export PGPASSWORD="${DB_PASSWORD}"
 echo "Waiting for 30 seconds before continuing..."
-sleep 15
+sleep 7
 echo "Wait period complete. Continuing with script execution."
 
 >&2 echo "Postgres is up and running on port ${DB_PORT} - running migrations now!"

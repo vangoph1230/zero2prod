@@ -1,6 +1,7 @@
 use actix_web::{web, HttpRequest, HttpResponse, ResponseError};
 use anyhow::Context;
 use secrecy::Secret;
+use secrecy::ExposeSecret;
 use sqlx::PgPool;
 use crate::{email_client::EmailClient, routes::error_chain_fmt};
 use crate::domain::SubscriberEmail;
@@ -91,6 +92,23 @@ async fn get_confirmed_subscribers(
     Ok(confirmed_subscribers)
 }
 
+
+
+struct Credentials {
+    username: String,
+    password: Secret<String>,
+}
+
+#[tracing::instrument(
+    name = "Publish a newsletter issue",
+    skip(body, pool, email_client, request),
+    fields(
+        // 字段先设为空,即使后续代码没有给这些字段赋值，
+        // 它们在 span 中也是存在的（值为空）
+        username=tracing::field::Empty,  
+        user_id=tracing::field::Empty,    
+    )
+)]
 pub async fn publish_newsletter(
     body: web::Json<BodyData>,
     pool: web::Data<PgPool>,
@@ -100,6 +118,22 @@ pub async fn publish_newsletter(
     // credentials 凭证
     let credentials = basic_authentication(request.headers())
         .map_err(PublishError::AuthError)?;
+    // 在运行时给之前在 fields() 中声明的空字段赋值
+    // tracing::Span::current() 获取由宏自动创建的当前 span
+    // .record("field_name", value) 将值填入指定字段
+    tracing::Span::current().record(
+        "username", 
+        &tracing::field::display(&credentials.username)
+    );
+    let user_id = validate_credentials(credentials, &pool).await?;
+    // tracing::field::display() 是一个函数，它接受任何实现了 
+    // std::fmt::Display trait 的值，并将其包装成一个
+    // 实现了 tracing::field::Value trait 的特殊类型
+    // record()的第二个参数要求是 &dyn Value
+    tracing::Span::current().record(
+        "user_id", 
+        &tracing::field::display(&user_id),
+    );
     let subscribers = get_confirmed_subscribers(&pool).await?;
     for subscriber in subscribers {
         match subscriber {
@@ -134,14 +168,9 @@ pub async fn publish_newsletter(
     Ok(HttpResponse::Ok().finish())
 }
 
-struct Credentials {
-    username: String,
-    password: Secret<String>,
-}
-
 /// 一个用于处理 HTTP Basic 认证的函数
 /// Anthorization: Basic<编码后的凭据>
-/// <编码后的凭据>是 {username}:{password}的base64编码格式
+/// - <编码后的凭据>是 {username}:{password}的base64编码格式
 fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Error> {
     let header_value = headers
         .get("Authorization")
@@ -169,4 +198,30 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
         username, 
         password: Secret::new(password),
     })
+}
+
+async fn validate_credentials(
+    credentials: Credentials,
+    pool: &PgPool,
+) -> Result<uuid::Uuid, PublishError> {
+    // user_id 变量的类型是 Option<Row>
+    // 如果凭证正确：Some(row)（row 包含 user_id 字段）
+    // 如果凭证错误：None
+    let user_id: Option<_> = sqlx::query!(
+            r#"
+            SELECT user_id FROM users WHERE username = $1 AND password = $2
+            "#,
+            credentials.username,
+            credentials.password.expose_secret()
+        )
+        .fetch_optional(pool)
+        .await
+        .context("Failed to perform a query to validate auth credentials.")
+        .map_err(PublishError::UnexpectedError)?;
+    // 输入：Option<Row>,输出：Option<UserId>
+    user_id.map(|row| row.user_id)
+        .ok_or_else(|| anyhow::anyhow!(
+            "Invalid username or password."
+        ))
+        .map_err(PublishError::AuthError)
 }
