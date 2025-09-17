@@ -39,6 +39,8 @@ impl TestApp {
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
         reqwest::Client::new()
             .post(&format!("{}/newsletters", &self.address))
+            // 随机凭据，'reqwest'会为我们完成所有的编码/格式化工作
+            .basic_auth(Uuid::new_v4().to_string(), Some(Uuid::new_v4().to_string()))
             .json(&body)
             .send()
             .await
@@ -82,7 +84,6 @@ impl TestApp {
             plain_text,
         }
     }
-    
 }
 
 /// 服务器的端口由Os随机分配,初始化应用配置，初始化数据库配置，启动服务
