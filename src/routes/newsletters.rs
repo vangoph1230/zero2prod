@@ -7,6 +7,8 @@ use crate::{email_client::EmailClient, routes::error_chain_fmt};
 use crate::domain::SubscriberEmail;
 use actix_web::http::{header, StatusCode};
 use actix_web::http::header::{HeaderMap, HeaderValue};
+use sha3::Digest;
+use argon2::{Algorithm, Argon2, Params, Version};
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -200,24 +202,48 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
     })
 }
 
+/// 验证 凭据的 有效性
+/// - 使用输入的用户名和密码同时查询查询
+///   数据库二者是否同时存在，存在则返回user_id
 async fn validate_credentials(
     credentials: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
+    // 这里使用的是密码哈希算法Argon2
+    // 具有抗暴力破解的特性（工作因子、盐值等）
+    let hasher = Argon2::new(
+        Algorithm::Argon2id,
+        Version::V0x13,
+        Params::new(15000, 2, 1, None)
+            .context("Failed to build Argon2 parameters")
+            .map_err(PublishError::UnexpectedError)?,
+    );
+    let password_hash = sha3::Sha3_256::digest(
+        // as_bytes() 转换为字节切片，因为哈希函数处理的是原始字节
+        credentials.password.expose_secret().as_bytes()
+    );
+    // 小写字母十六进制编码
+    // {} 表示占位符, :x 指定格式化为小写十六进制
+    // 十六进制字符串对人类更友好，便于调试和日志记录
+    let password_hash = format!("{:x}", password_hash);
+
     // user_id 变量的类型是 Option<Row>
     // 如果凭证正确：Some(row)（row 包含 user_id 字段）
     // 如果凭证错误：None
     let user_id: Option<_> = sqlx::query!(
             r#"
-            SELECT user_id FROM users WHERE username = $1 AND password = $2
+            SELECT user_id 
+            FROM users 
+            WHERE username = $1 AND password_hash = $2
             "#,
             credentials.username,
-            credentials.password.expose_secret()
+            password_hash,
         )
         .fetch_optional(pool)
         .await
         .context("Failed to perform a query to validate auth credentials.")
         .map_err(PublishError::UnexpectedError)?;
+
     // 输入：Option<Row>,输出：Option<UserId>
     user_id.map(|row| row.user_id)
         .ok_or_else(|| anyhow::anyhow!(
