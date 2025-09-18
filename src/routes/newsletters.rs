@@ -7,8 +7,7 @@ use crate::{email_client::EmailClient, routes::error_chain_fmt};
 use crate::domain::SubscriberEmail;
 use actix_web::http::{header, StatusCode};
 use actix_web::http::header::{HeaderMap, HeaderValue};
-use argon2::{Algorithm, Params, Version};
-use argon2::PasswordHasher;
+use argon2::{Argon2, PasswordHash, PasswordVerifier};
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -203,25 +202,16 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
 }
 
 /// 验证 凭据的 有效性
-/// - 1、先根据用户名查询数据库中相应的user_id、password_hash、salt
-/// - 2、用查询到的salt向密码添加盐值，生成新的加密哈希值，并编码为小写字母十六进制
-/// - 3、用新加密哈希值与数据库中的password_hash比较，相等，即密码正确，返回user_id 
+/// - 1、先从数据库中查询存储的HPC格式的哈希值
+/// - 2、使用PHC格式的哈希值初始化PasswrodHash(PHC的实现)
+/// - 3、使用PHC实例验证password
 async fn validate_credentials(
     credentials: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
-    // 这里使用的是密码哈希算法Argon2
-    // 具有抗暴力破解的特性（工作因子、盐值等）
-    let hasher = argon2::Argon2::new(
-        Algorithm::Argon2id,
-        Version::V0x13,
-        Params::new(15000, 2, 1, None)
-            .context("Failed to build Argon2 parameters")
-            .map_err(PublishError::UnexpectedError)?,
-    );
     let row = sqlx::query!(
         r#"
-        SELECT user_id, password_hash, salt
+        SELECT user_id, password_hash
         FROM users
         WHERE username = $1
         "#,
@@ -232,29 +222,30 @@ async fn validate_credentials(
     .context("Failed to perform a query to retrieve stored credentials.")
     .map_err(PublishError::UnexpectedError)?;
 
-    let (expected_password_hash, user_id, salt) = match row {
-        Some(row) => (row.password_hash, row.user_id, row.salt),
+    let (expected_password_hash, user_id) = match row {
+        Some(row) => (row.password_hash, row.user_id),
         None => {
             return Err(PublishError::AuthError(anyhow::anyhow!(
-                "Unkown username."
+                "Invalid username."
             )));
         }
     };
 
-    // 用查询到的salt向密码添加盐值，生成新的加密哈希值
-    let password_hash = hasher.hash_password(
-        credentials.password.expose_secret().as_bytes(),
-        &salt,
-    )
-    .context("Failed to hash password.")
-    .map_err(PublishError::UnexpectedError)?;
+    // PasswordHash是PHC字符串格式的实现
+    // 将密码哈希值以PHC字符串格式存储，可以避免使用显示参数初始化Argon2结构
+    let expected_password_hash = PasswordHash::new(&expected_password_hash)
+        .context("Failed to parse hash in PHC string format.")
+        .map_err(PublishError::UnexpectedError)?;
 
-    let password_hash = format!("{:x}", password_hash.hash.unwrap());
-    if password_hash != expected_password_hash {
-        Err(PublishError::AuthError(anyhow::anyhow!(
-            "Invalid password."
-        )))
-    } else {
-        Ok(user_id)
-    }
+    // 通过使用PasswordHash传递预期的哈希值，Argon2可以自动推断
+    // 应该使用哪些负载参数和盐值来验证密码是否匹配
+    Argon2::default()
+        .verify_password(
+            credentials.password.expose_secret().as_bytes(),
+            &expected_password_hash,
+        )
+        .context("Invalid password.")
+        .map_err(PublishError::AuthError)?;
+
+    Ok(user_id)
 }
