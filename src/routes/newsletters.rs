@@ -7,8 +7,8 @@ use crate::{email_client::EmailClient, routes::error_chain_fmt};
 use crate::domain::SubscriberEmail;
 use actix_web::http::{header, StatusCode};
 use actix_web::http::header::{HeaderMap, HeaderValue};
-use sha3::Digest;
-use argon2::{Algorithm, Argon2, Params, Version};
+use argon2::{Algorithm, Params, Version};
+use argon2::PasswordHasher;
 
 #[derive(serde::Deserialize)]
 pub struct BodyData {
@@ -170,7 +170,7 @@ pub async fn publish_newsletter(
     Ok(HttpResponse::Ok().finish())
 }
 
-/// 一个用于处理 HTTP Basic 认证的函数
+/// 一个用于处理 HTTP Basic 认证的函数,提取请求头中包含的用户名和密码
 /// Anthorization: Basic<编码后的凭据>
 /// - <编码后的凭据>是 {username}:{password}的base64编码格式
 fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Error> {
@@ -203,51 +203,58 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
 }
 
 /// 验证 凭据的 有效性
-/// - 使用输入的用户名和密码同时查询查询
-///   数据库二者是否同时存在，存在则返回user_id
+/// - 1、先根据用户名查询数据库中相应的user_id、password_hash、salt
+/// - 2、用查询到的salt向密码添加盐值，生成新的加密哈希值，并编码为小写字母十六进制
+/// - 3、用新加密哈希值与数据库中的password_hash比较，相等，即密码正确，返回user_id 
 async fn validate_credentials(
     credentials: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
     // 这里使用的是密码哈希算法Argon2
     // 具有抗暴力破解的特性（工作因子、盐值等）
-    let hasher = Argon2::new(
+    let hasher = argon2::Argon2::new(
         Algorithm::Argon2id,
         Version::V0x13,
         Params::new(15000, 2, 1, None)
             .context("Failed to build Argon2 parameters")
             .map_err(PublishError::UnexpectedError)?,
     );
-    let password_hash = sha3::Sha3_256::digest(
-        // as_bytes() 转换为字节切片，因为哈希函数处理的是原始字节
-        credentials.password.expose_secret().as_bytes()
-    );
-    // 小写字母十六进制编码
-    // {} 表示占位符, :x 指定格式化为小写十六进制
-    // 十六进制字符串对人类更友好，便于调试和日志记录
-    let password_hash = format!("{:x}", password_hash);
+    let row = sqlx::query!(
+        r#"
+        SELECT user_id, password_hash, salt
+        FROM users
+        WHERE username = $1
+        "#,
+        credentials.username,
+    )
+    .fetch_optional(pool)
+    .await
+    .context("Failed to perform a query to retrieve stored credentials.")
+    .map_err(PublishError::UnexpectedError)?;
 
-    // user_id 变量的类型是 Option<Row>
-    // 如果凭证正确：Some(row)（row 包含 user_id 字段）
-    // 如果凭证错误：None
-    let user_id: Option<_> = sqlx::query!(
-            r#"
-            SELECT user_id 
-            FROM users 
-            WHERE username = $1 AND password_hash = $2
-            "#,
-            credentials.username,
-            password_hash,
-        )
-        .fetch_optional(pool)
-        .await
-        .context("Failed to perform a query to validate auth credentials.")
-        .map_err(PublishError::UnexpectedError)?;
+    let (expected_password_hash, user_id, salt) = match row {
+        Some(row) => (row.password_hash, row.user_id, row.salt),
+        None => {
+            return Err(PublishError::AuthError(anyhow::anyhow!(
+                "Unkown username."
+            )));
+        }
+    };
 
-    // 输入：Option<Row>,输出：Option<UserId>
-    user_id.map(|row| row.user_id)
-        .ok_or_else(|| anyhow::anyhow!(
-            "Invalid username or password."
-        ))
-        .map_err(PublishError::AuthError)
+    // 用查询到的salt向密码添加盐值，生成新的加密哈希值
+    let password_hash = hasher.hash_password(
+        credentials.password.expose_secret().as_bytes(),
+        &salt,
+    )
+    .context("Failed to hash password.")
+    .map_err(PublishError::UnexpectedError)?;
+
+    let password_hash = format!("{:x}", password_hash.hash.unwrap());
+    if password_hash != expected_password_hash {
+        Err(PublishError::AuthError(anyhow::anyhow!(
+            "Invalid password."
+        )))
+    } else {
+        Ok(user_id)
+    }
 }
