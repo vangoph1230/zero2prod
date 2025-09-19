@@ -224,4 +224,22 @@ argon2的详细介绍
 为了对用户进行身份验证，我们需要可重复性：每次都必须运行完全相同的哈希算法。
 base64编码存储的哈希值，带有强烈的隐含假设：在password_hash列中存储的所有值都是使用相同的负载参数计算得出的。为了安全，迁移到更高的负载参数上时，为了继续对老用户进行身份验证，那我们必须在每个哈希值旁边存储用于计算它的负载参数。如果Argon2id存在漏洞，被迫迁移到其他算法，将会很繁琐。
 更好的解决方案是PHC字符串格式。PHC字符串格式提供了密码哈希值的标准表示方式，包括哈希值本身、盐值、算法以及其它关联的参数。
-argon2包暴漏了PasswordHash，它是HPC字符串格式的Rust实现。
+argon2包暴漏了PasswordHash::new()，它是HPC字符串格式的Rust实现。
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+10.2.4 不要阻塞异步执行器
+TEST_LOG=true cargo test --quiet --release newsletters_are_delivered_to_confirmed_subscribers | grep "VERIFY PASSWOED" | bunyan   未看到结果
+TEST_LOG=true cargo test --quiet --release newsletters_are_delivered_to_confirmed_subscribers | grep "VERIFY PASSWOED HASH" | bunyan  未看到结果
+TEST_LOG=true cargo test --quiet --release newsletters_are_delivered_to_confirmed_subscribers | bunyan 可看到结果，由个人计算，差12ms
+
+***重点***
+在Rust中，async/await是基于一种被称为“协作式调度”的概念构建的；.await被称为交还点---future从前一个.await进展到下一个.await，然后将控制权交还给执行器。
+执行器可以选择重新对同一个futrue进行轮询，或者优先处理其它任务以取得进展。
+异步运行时的基本假设是：大多数异步任务都在执行某种输入输出(I/O)工作---它们的大部分执行时间都花费在等待其他事件的发生上。
+轮询poll应该是快速的---它应该在**10~100μs微妙**内返回；如果调用poll的时间较长(或永远不返回)，那么异步执行器将无法在任何其他任何上取得进展---这就是
+我们所说的“任务阻塞了执行器/异步线程”的情况；应该始终注意那些可能需要**超过1ms毫秒**的CPU密集型工作负责；
+为了与tokio友好的协作，我们必须使用tokio::task::spawn_blocking将执行超过1ms的CPU密集型任务转移到一个单独的线程池中，这些线程专门用于阻塞操作，并不干扰异步任务的调度；
+***重点***
+一个异步任务在每次 await 之前，连续执行同步代码（不包含 .await）的时间应该尽可能短，理想情况下不超过 10-100 微秒（μs），绝对不要超过 1 毫秒（ms）;
+
+tracing::Span::current(),返回当前跨度，实际指的是“当前线程的活跃跨度”，tracing::info_span!(...) 在创建新 Span 时，会默认地、自动地
+尝试将自己设置为 Span::current() 的子跨度；对新线程创建有关联的跨度，可以通过显式的将当前跨度添加到新创建的线程来解决问题，即current_span.in_scope(|| {})。

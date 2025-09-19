@@ -3,6 +3,7 @@ use anyhow::Context;
 use secrecy::Secret;
 use secrecy::ExposeSecret;
 use sqlx::PgPool;
+use crate::telemetry::spawn_blocking_with_tracing;
 use crate::{email_client::EmailClient, routes::error_chain_fmt};
 use crate::domain::SubscriberEmail;
 use actix_web::http::{header, StatusCode};
@@ -205,47 +206,79 @@ fn basic_authentication(headers: &HeaderMap) -> Result<Credentials, anyhow::Erro
 /// - 1、先从数据库中查询存储的HPC格式的哈希值
 /// - 2、使用PHC格式的哈希值初始化PasswrodHash(PHC的实现)
 /// - 3、使用PHC实例验证password
+#[tracing::instrument(
+    name = "Validate credentials",
+    skip(credentials, pool),
+)]
 async fn validate_credentials(
     credentials: Credentials,
     pool: &PgPool,
 ) -> Result<uuid::Uuid, PublishError> {
+    let (user_id, expected_password_hash) = get_stored_credentials(
+        &credentials.username,
+        pool,
+    )
+    .await
+    .map_err(PublishError::UnexpectedError)?
+    .ok_or_else(|| PublishError::AuthError(anyhow::anyhow!(
+        "Unknow username."
+    )))?;
+
+    spawn_blocking_with_tracing(move || {
+        verify_password_hash(
+            expected_password_hash, 
+            credentials.password,
+        )
+    })
+    .await
+    .context("Failed to spawn Blocking task.")
+    .map_err(PublishError::AuthError)??;
+
+    Ok(user_id)
+}
+
+#[tracing::instrument(
+    name = "Get stored credentials",
+    skip(username, pool),
+)]
+async fn get_stored_credentials(
+    username: &str,
+    pool: &PgPool,
+) -> Result<Option<(uuid::Uuid, Secret<String>)>, anyhow::Error> {
     let row = sqlx::query!(
         r#"
         SELECT user_id, password_hash
         FROM users
         WHERE username = $1
         "#,
-        credentials.username,
+        username,
     )
     .fetch_optional(pool)
     .await
-    .context("Failed to perform a query to retrieve stored credentials.")
+    .context("Failed to perform a query to retrieve stored credentials.")?
+    .map(|row| (row.user_id, Secret::new(row.password_hash)));
+    Ok(row)
+}
+
+#[tracing::instrument(
+    name = "Verify password hash",
+    skip(expected_password_hash, password_candidate),
+)]
+fn verify_password_hash(
+    expected_password_hash: Secret<String>,
+    password_candidate: Secret<String>,
+) -> Result<(), PublishError> {
+    let expected_password_hash = PasswordHash::new(
+        expected_password_hash.expose_secret()
+    )
+    .context("Failed to parse hash in PHC string format.")
     .map_err(PublishError::UnexpectedError)?;
 
-    let (expected_password_hash, user_id) = match row {
-        Some(row) => (row.password_hash, row.user_id),
-        None => {
-            return Err(PublishError::AuthError(anyhow::anyhow!(
-                "Invalid username."
-            )));
-        }
-    };
-
-    // PasswordHash是PHC字符串格式的实现
-    // 将密码哈希值以PHC字符串格式存储，可以避免使用显示参数初始化Argon2结构
-    let expected_password_hash = PasswordHash::new(&expected_password_hash)
-        .context("Failed to parse hash in PHC string format.")
-        .map_err(PublishError::UnexpectedError)?;
-
-    // 通过使用PasswordHash传递预期的哈希值，Argon2可以自动推断
-    // 应该使用哪些负载参数和盐值来验证密码是否匹配
     Argon2::default()
         .verify_password(
-            credentials.password.expose_secret().as_bytes(),
-            &expected_password_hash,
+            password_candidate.expose_secret().as_bytes(), 
+            &expected_password_hash
         )
         .context("Invalid password.")
-        .map_err(PublishError::AuthError)?;
-
-    Ok(user_id)
+        .map_err(PublishError::AuthError)
 }

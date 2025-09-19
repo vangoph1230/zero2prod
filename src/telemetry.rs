@@ -3,6 +3,7 @@ use tracing_subscriber::{EnvFilter, Registry, layer::SubscriberExt};
 use tracing_subscriber::fmt::MakeWriter;
 use tracing_log::LogTracer;
 use tracing_bunyan_formatter::{JsonStorageLayer, BunyanFormattingLayer};
+use tokio::task::JoinHandle;
 
 /// 获取tracing-subscriber中的注册表类型
 /// - std::io:stdout 输出到终端，即日志可见，输出到屏幕
@@ -38,4 +39,15 @@ pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) {
     LogTracer::init().expect("Failed to set logger");
     // set_global_default仅能调用一次
     set_global_default(subscriber).expect("Failed to set subscriber");
+}
+
+/// 使新线程中创建的新跨度继承有父跨度的属性
+/// - 复制了'spawn_blocking'的trait 约束和签名 
+pub fn spawn_blocking_with_tracing<F, R>(f: F) -> JoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+{
+    let current_span = tracing::Span::current();
+    tokio::task::spawn_blocking(move || current_span.in_scope(f))
 }
