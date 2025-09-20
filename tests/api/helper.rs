@@ -7,8 +7,8 @@ use zero2prod::startup::Application;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
 use sha3::Digest;
-use argon2::password_hash::SaltString;
-use argon2::{Argon2, PasswordHasher};
+use argon2::password_hash::{self, SaltString};
+use argon2::{Argon2, Algorithm, Params, PasswordHasher, Version};
 
 
 
@@ -111,6 +111,7 @@ impl TestApp {
 }
 
 impl TestUser {
+
     pub fn generate() -> Self {
         Self {
             user_id: Uuid::new_v4(),
@@ -118,16 +119,18 @@ impl TestUser {
             password: Uuid::new_v4().to_string(),
         }
     }
+
     async fn argon2_store(&self, pool: &PgPool) {
         let salt = SaltString::generate(&mut rand::thread_rng());
-        // 这里我们并不关心具体的Argon2参数，因为只是为了测试
-        let password_hash = Argon2::default()
-            .hash_password(
-                self.password.as_bytes(),
-                &salt
-            )
-            .unwrap()
-            .to_string();
+   
+        let password_hash = Argon2::new(
+            Algorithm::Argon2d,
+            Version::V0x13,
+            Params::new(15000, 2, 1, None).unwrap(),
+        )
+        .hash_password(self.password.as_bytes(), &salt)
+        .unwrap()
+        .to_string();
         
         sqlx::query!(
             r#"

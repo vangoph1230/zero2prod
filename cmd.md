@@ -243,3 +243,14 @@ TEST_LOG=true cargo test --quiet --release newsletters_are_delivered_to_confirme
 
 tracing::Span::current(),返回当前跨度，实际指的是“当前线程的活跃跨度”，tracing::info_span!(...) 在创建新 Span 时，会默认地、自动地
 尝试将自己设置为 Span::current() 的子跨度；对新线程创建有关联的跨度，可以通过显式的将当前跨度添加到新创建的线程来解决问题，即current_span.in_scope(|| {})。
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+10.2.5 
+TEST_LOG=true cargo test --quiet --release non_existing_user_is_rejected | grep "HTTP REQUEST" | bunyan  测试耗时55ms和书本1ms结果不一致
+TEST_LOG=true cargo test --quiet --release invalid_password_is_rejected | grep "HTTP REQUEST" | bunyan   测试耗时165ms和书本10ms结果不一致
+用户不存在和错误密码的测试耗时，存在较大差距，攻击者可以利用这个差异进行时序攻击，它属于侧信道攻击的一大类。
+如果攻击者至少知道一个有效的用户名，那么他们可以通过检查服务器的响应时间来确认是否存在另一个用户名 --- 用户枚举漏洞
+防止时序攻击的策略方式：
+    一.消除密码验证失败和用户名验证失败之间的时间差异；
+    二.限制给定IP地址/用户名的身份验证失败尝试次数，通常对抵御暴力破解很有价值；
+
+实现策略一：需要阻止其过早退出---应该有一个预期的回退密码(带有盐值和加载参数)，它先根据username获取存储的password_hash和user_id的情况决定其值,再与密码候选集和哈希值进行比较,最后必须再检查user_id是否存在。
