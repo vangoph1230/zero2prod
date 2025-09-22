@@ -1,5 +1,5 @@
 use crate::email_client::EmailClient;
-use crate::routes::{health_check, home, login, publish_newsletter, subscribe};
+use crate::routes::{health_check, home, login, login_form, publish_newsletter, subscribe};
 use crate::configuration::Settings;
 use crate::configuration::DatabaseSettings;
 use crate::routes::confirm;
@@ -94,7 +94,8 @@ pub fn run(
                 // 替换"Logger::default()"
                 .wrap(TracingLogger::default())
                 .route("/", web::get().to(home))
-                .route("/login", web::get().to(login))
+                .route("/login", web::get().to(login_form))
+                .route("/login", web::post().to(login))
                 .route("/newsletters", web::post().to(publish_newsletter))
                 .route("/health_check", web::get().to(health_check))
                 .route("/subscriptions", web::post().to(subscribe))
