@@ -1,3 +1,4 @@
+use actix_web::http::header::ContentType;
 use actix_web::http::header::LOCATION;
 use actix_web::HttpResponse;
 use actix_web::web;
@@ -64,9 +65,51 @@ impl std::fmt::Debug for LoginError {
 
 impl ResponseError for LoginError {
     fn status_code(&self) -> StatusCode {
-        match self {
-            LoginError::AuthError(_) => StatusCode::UNAUTHORIZED,
-            LoginError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
+        StatusCode::SEE_OTHER
+    }
+
+    fn error_response(&self) -> HttpResponse {
+        HttpResponse::build(self.status_code())
+            .insert_header((LOCATION, "/login"))
+            .finish()
     }
 }
+
+/*
+fn error_response(&self) -> HttpResponse {
+        HttpResponse::build(self.status_code())
+            .content_type(ContentType::html())
+            .body(format!(
+                r#"<!DOCTYPE html>
+                <html lang="en">
+                <head>
+                    <meta http-equiv="content-type" content="text/html;charset=utf-8">
+                    <title>Login</title>
+                </head>
+                    <body>
+                        <p><i>{}</i></p>
+                        <form action="/login" method="post">
+                            <label>Username
+                                <input
+                                    type="text"
+                                    placeholder="Enter Username"
+                                    name="username"
+                                >
+                            </label>
+                            <label>Password
+                                <input
+                                    type="password"
+                                    placeholder="Enter password"
+                                    name="password"
+                                >
+                            </label>
+                            <button type="submit">Login</button>
+                        </form>
+                    </body>
+                </html>
+                "#,
+                self
+            ))
+    }
+}
+*/
