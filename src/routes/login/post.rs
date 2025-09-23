@@ -1,4 +1,3 @@
-use actix_web::http::header::ContentType;
 use actix_web::http::header::LOCATION;
 use actix_web::HttpResponse;
 use actix_web::web;
@@ -19,6 +18,7 @@ pub struct FormData {
 }
 
 #[tracing::instrument(
+    name="in 'login' hander"
     skip(form, pool),
     fields(
         username=tracing::field::Empty,
@@ -64,13 +64,16 @@ impl std::fmt::Debug for LoginError {
 }
 
 impl ResponseError for LoginError {
+
     fn status_code(&self) -> StatusCode {
         StatusCode::SEE_OTHER
     }
 
     fn error_response(&self) -> HttpResponse {
+        // 对LoginError的内容展示进行URL编码
+        let encoded_error = urlencoding::Encoded::new(self.to_string());
         HttpResponse::build(self.status_code())
-            .insert_header((LOCATION, "/login"))
+            .insert_header((LOCATION, format!("/login?error={}", encoded_error)))
             .finish()
     }
 }

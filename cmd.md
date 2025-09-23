@@ -372,4 +372,11 @@ http://localhost:8000/login
     - LoginError：这表示我们正在为自定义的 LoginError 类型实现这个 trait。LoginError 可能是一个枚举（Enum），列举了各种登录相关的错误；
 实现了 ResponseError trait 后，在任何返回 Result<T, LoginError> 的请求处理函数（handler）中，如果结果是 Err(LoginError)，Actix-Web 框架
 会自动调用这里的 error_response 方法来生成并发送 HTTP 响应；
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+10.6.4.2  LOCATION请求头的值确定了用户被重定向到的URL,还可以指定查询参数；查询参数是URL的一部分；
 
+访问流程：
+浏览器输入"localhost:8000/login"-> Request使用HTTP GET /login_form 访问服务器 -> 获得HTML页面
+由于HTML中form明确的设置action和method,提交form 后 -> Request使用HTTP POST /login 访问服务
+凭据验证失败后，Post.rs中的error_response()会重定向到"HTTP GET /login_form ，并且URL包含error查询参数
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
