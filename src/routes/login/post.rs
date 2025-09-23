@@ -18,7 +18,6 @@ pub struct FormData {
 }
 
 #[tracing::instrument(
-    name="in 'login' hander"
     skip(form, pool),
     fields(
         username=tracing::field::Empty,
