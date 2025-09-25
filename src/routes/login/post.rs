@@ -20,6 +20,7 @@ pub struct FormData {
 }
 
 #[tracing::instrument(
+    name="called /login"
     skip(form, pool, secret),
     fields(
         username=tracing::field::Empty,
