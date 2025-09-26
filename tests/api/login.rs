@@ -11,15 +11,14 @@ async fn an_error_flash_message_is_set_on_failure() {
     // 即Location请求头中指定的路径；
     // ClientBuilder的redirect::Policy自定义Client行为
     let response = app.post_login(&login_body).await;
+
     assert_eq!(response.status().as_u16(), 303);
     assert_is_redirect_to(&response, "/login");
-/* 
-    let cookies: HashSet<_> = response
-        .headers()
-        .get_all("Set-Cookie")
-        .into_iter()
-        .collect();
-    */
+
     let flash_cookie = response.cookies().find(|c| c.name() == "_flash").unwrap();
     assert_eq!(flash_cookie.value(), "Authentication failed");
+
+    let html_page = app.get_login_html().await;
+    assert!(html_page.contains(r#"<p><i>Authentication failed</i></p>"#));
+
 }
