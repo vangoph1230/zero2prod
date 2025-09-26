@@ -18,7 +18,7 @@ pub struct FormData {
 }
 
 #[tracing::instrument(
-    name="called /login"
+    name="POST /login"
     skip(form, pool),
     fields(
         username=tracing::field::Empty,
@@ -56,7 +56,6 @@ pub async fn login(
             // 会自动地、立即地向新的 URL发起一个新的 GET 请求
             let response = HttpResponse::SeeOther()
                 .insert_header((LOCATION, "/login",))
-                .insert_header(("Set-Cookie", format!("_flash={e}")))
                 .cookie(Cookie::new("_flash", e.to_string()))
                 .finish();
             // 构建一个包含预定义响应的InternalError
