@@ -1,7 +1,3 @@
-use std::collections::HashSet;
-
-use reqwest::header::HeaderValue;
-
 use crate::helper::{assert_is_redirect_to, spawn_app};
 
 #[tokio::test]

@@ -1,17 +1,15 @@
+use actix_web::cookie::Cookie;
 use actix_web::http::header::LOCATION;
 use actix_web::HttpResponse;
 use actix_web::web;
 use actix_web::error::InternalError;
 use secrecy::Secret;
-use secrecy::ExposeSecret;
 use sqlx::PgPool;
-use hmac::{Hmac, Mac};
 
 use crate::authentication::validate_credentials;
 use crate::authentication::Credentials;
 use crate::authentication::AuthError;
 use crate::routes::error_chain_fmt;
-use crate::startup::HmacSecret;
 
 #[derive(serde::Deserialize)]
 pub struct FormData {
@@ -51,20 +49,15 @@ pub async fn login(
                 AuthError::InvalidCredentials(_) => LoginError::AuthError(e.into()),
                 AuthError::UnexpectedError(_) => LoginError::UnexpectedError(e.into()),
             };
-            let query_string = format!(
-                "error={}",
-                urlencoding::Encoded::new(e.to_string()),
-            );
          
             // HTTP 303 See Other 重定向响应,将用户跳转到登录页面
             // HTTP 303 适用于 POST 后的重定向，确保后续请求使用 GET 方法
             // 浏览器收到 HTTP 303 响应,识别到 303 状态码和 Location 头部，
             // 会自动地、立即地向新的 URL发起一个新的 GET 请求
             let response = HttpResponse::SeeOther()
-                .insert_header((
-                    LOCATION,
-                    "/login",
-                ))
+                .insert_header((LOCATION, "/login",))
+                .insert_header(("Set-Cookie", format!("_flash={e}")))
+                .cookie(Cookie::new("_flash", e.to_string()))
                 .finish();
             // 构建一个包含预定义响应的InternalError
             // InternalError实现了ResponseError

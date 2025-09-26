@@ -419,3 +419,7 @@ http://localhost:8000/login?error=Your%20account%20has%20been%20locked%2C%20plea
 10.6.4.9 设置Cookie实际上是通过在相应中添加一个特殊的HTTP请求头Set-Cookie来设置Cookie: Set-Cookie: <cookie-name>=<cookie-value>;
 Set-Cookie可以被多次指定---每个Cookie都可以设置一次；
 Cookie是如此普遍，值得拥有一个专门的API,让我们免去使用原始请求头的痛苦。reqwest将此功能锁定在cookies功能标志的后面；
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+10.6.4.10 在actix-web中设置Cookie
+.insert_header(("Set-Cookie", format!("_flash={e}")))
+或 .cookie(Cookie::new("_flash", e.to_string()))    actix-web提供的一个专门的Cookie API
