@@ -29,7 +29,6 @@ serde-aux = "3"
 unicode-segmentation = "1"
 claim = "0.5"
 validator = "0.14"
-reqwest = {version = "0.11", default-features = false, features = ["rustls-tls", "json"]}
 rand ={ version = "0.8", features = ["std_rng"]}
 thiserror = "1"
 anyhow = "1"
@@ -55,6 +54,11 @@ features = [
     "migrate",
     "offline",
 ]
+
+[dependencies.reqwest]
+version = "0.11"
+default-features = false
+features = ["json", "rustls-tls", "cookies"]
 
 [dev-dependencies]
 fake = "~2.3"

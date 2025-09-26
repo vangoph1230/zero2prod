@@ -21,7 +21,7 @@ pub struct FormData {
 
 #[tracing::instrument(
     name="called /login"
-    skip(form, pool, secret),
+    skip(form, pool),
     fields(
         username=tracing::field::Empty,
         user_id=tracing::field::Empty,
@@ -30,7 +30,6 @@ pub struct FormData {
 pub async fn login(
     form: web::Form<FormData>, 
     pool: web::Data<PgPool>,
-    secret: web::Data<HmacSecret>
 ) -> Result<HttpResponse, InternalError<LoginError>> {
     let credentials = Credentials {
         username: form.0.username,
@@ -56,17 +55,15 @@ pub async fn login(
                 "error={}",
                 urlencoding::Encoded::new(e.to_string()),
             );
-            let hmac_tag = {
-                let mut mac = Hmac::<sha2::Sha256>::new_from_slice(
-                    secret.0.expose_secret().as_bytes()
-                ).unwrap();
-                mac.update(query_string.as_bytes());
-                mac.finalize().into_bytes()
-            };
+         
+            // HTTP 303 See Other 重定向响应,将用户跳转到登录页面
+            // HTTP 303 适用于 POST 后的重定向，确保后续请求使用 GET 方法
+            // 浏览器收到 HTTP 303 响应,识别到 303 状态码和 Location 头部，
+            // 会自动地、立即地向新的 URL发起一个新的 GET 请求
             let response = HttpResponse::SeeOther()
                 .insert_header((
                     LOCATION,
-                    format!("/login?{}&tag={:x}", query_string, hmac_tag),
+                    "/login",
                 ))
                 .finish();
             // 构建一个包含预定义响应的InternalError

@@ -1,3 +1,6 @@
+use std::panic::Location;
+
+use chrono::Local;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
@@ -7,7 +10,7 @@ use zero2prod::startup::Application;
 use zero2prod::telemetry::{get_subscriber, init_subscriber};
 use once_cell::sync::Lazy;
 use sha3::Digest;
-use argon2::password_hash::{self, SaltString};
+use argon2::password_hash::SaltString;
 use argon2::{Argon2, Algorithm, Params, PasswordHasher, Version};
 
 
@@ -45,6 +48,21 @@ pub struct ConfirmationLinks {
 }
 
 impl TestApp {
+
+    pub async fn post_login<Body>(&self, body: &Body) -> reqwest::Response 
+        where
+            Body:serde::Serialize,
+    {
+        reqwest::Client::builder()
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap()
+            .post(&format!("{}/login", &self.address))
+            .form(body)
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
 
     pub async fn post_newsletters(&self, body: serde_json::Value) -> reqwest::Response {
         reqwest::Client::new()
@@ -94,6 +112,7 @@ impl TestApp {
         }
     }
 
+ 
     pub async fn test_user(&self) -> (String, String) {
         // LIMIT 1 确保只返回最多一条记录
         // fetch_one() 方法要求查询必须返回恰好一条记录
@@ -146,6 +165,7 @@ impl TestUser {
         .expect("Failed to store test user.");
     }
 
+   
     async fn sha3_store(&self, pool: &PgPool) {
         let password_hash = sha3::Sha3_256::digest(
             self.password.as_bytes()
@@ -239,4 +259,9 @@ async fn configure_database(config: &DatabaseSettings) -> PgPool {
         .await
         .expect("Failed to migrate the database");
     connection_pool
+}
+
+pub fn assert_is_redirect_to(response: &reqwest::Response, location: &str) {
+    assert_eq!(response.status().as_u16(), 303);
+    assert_eq!(response.headers().get("LOCATION").unwrap(), location);
 }
