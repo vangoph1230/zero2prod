@@ -1,4 +1,4 @@
-use actix_web::{http::header::ContentType, web, HttpRequest, HttpResponse};
+use actix_web::{cookie::{time::Duration, Cookie}, http::header::ContentType, HttpRequest, HttpResponse};
 use hmac::{Hmac, Mac};
 use secrecy::ExposeSecret;
 use crate::startup::HmacSecret;
@@ -38,7 +38,7 @@ pub async fn login_form(request: HttpRequest) -> HttpResponse {
         }
     };
 
-    HttpResponse::Ok()
+    let mut response = HttpResponse::Ok()
         .content_type(ContentType::html())
         .body(format!(
             r#"
@@ -70,5 +70,11 @@ pub async fn login_form(request: HttpRequest) -> HttpResponse {
                     </body>
                 </html>
             "#,
-        ))
+        ));
+
+    // 需移除的Cookie属性设置,使浏览器/客户端删除具有此名称的存储Cookie
+    response.add_removal_cookie(&Cookie::new("_flash", ""))
+        .unwrap();
+    response
+
 }
