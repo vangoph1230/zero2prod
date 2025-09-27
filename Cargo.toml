@@ -40,6 +40,7 @@ hex = "0.4"
 htmlescape = "0.3"
 hmac = { version = "0.12", features = ["std"]}
 sha2 = "0.10"
+actix-web-flash-messages ={ version = "0.4", features = ["cookies"]}
 
 
 [dependencies.sqlx]

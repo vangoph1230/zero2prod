@@ -1,7 +1,10 @@
 use actix_web::{cookie::{time::Duration, Cookie}, http::header::ContentType, HttpRequest, HttpResponse};
+use actix_web_flash_messages::{IncomingFlashMessages, Level};
 use hmac::{Hmac, Mac};
 use secrecy::ExposeSecret;
+use std::fmt::Write;
 use crate::startup::HmacSecret;
+
 
 
 #[derive(serde::Deserialize)]
@@ -27,18 +30,13 @@ impl QueryParams {
     }
 }
 
-#[tracing::instrument(
-    name="GET /login_form",
-)]
-pub async fn login_form(request: HttpRequest) -> HttpResponse {
-    let error_html = match request.cookie("_flash") {
-        None => "".into(),
-        Some(cookie) => {
-            format!("<p><i>{}</i></p>", cookie.value())
-        }
-    };
+pub async fn login_form(flash_message: IncomingFlashMessages) -> HttpResponse {
+    let mut error_html = String::new();
+    for m in flash_message.iter().filter(|m| m.level() == Level::Error) {
+        writeln!(error_html, "<p><i>{}</p></i>", m.content()).unwrap();
+    }
 
-    let mut response = HttpResponse::Ok()
+    HttpResponse::Ok()
         .content_type(ContentType::html())
         .body(format!(
             r#"
@@ -70,11 +68,5 @@ pub async fn login_form(request: HttpRequest) -> HttpResponse {
                     </body>
                 </html>
             "#,
-        ));
-
-    // 需移除的Cookie属性设置,使浏览器/客户端删除具有此名称的存储Cookie
-    response.add_removal_cookie(&Cookie::new("_flash", ""))
-        .unwrap();
-    response
-
+        ))
 }

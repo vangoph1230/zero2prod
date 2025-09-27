@@ -3,14 +3,17 @@ use crate::routes::{health_check, home, login, login_form, publish_newsletter, s
 use crate::configuration::Settings;
 use crate::configuration::DatabaseSettings;
 use crate::routes::confirm;
+use actix_web::cookie::Key;
 use actix_web::web::Data;
+use actix_web_flash_messages::storage::CookieMessageStore;
+use actix_web_flash_messages::FlashMessagesFramework;
 use sqlx::postgres::PgPoolOptions;
 use actix_web::dev::Server;
 use actix_web::{web, App, HttpServer};
 use sqlx::PgPool;
 use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
-use secrecy::Secret;
+use secrecy::{ExposeSecret, Secret};
 
 #[derive(Clone)]
 pub struct HmacSecret(pub Secret<String>);
@@ -91,10 +94,17 @@ pub fn run(
     let email_client = web::Data::new(email_client);
     let base_url = Data::new(ApplicationBaseUrl(base_url));
 
+    let message_store = CookieMessageStore::builder(
+        Key::from(hmac_secret.expose_secret().as_bytes())
+    ).build();
+    // 创建Cookie,对其进行签名，设置正确的属性等
+    let message_framework = FlashMessagesFramework::builder(message_store).build();
+
     // TracingLogger一个专门为 actix-web 框架设计的中间件,基于tracing而非log实现,
     // 能自带request_id等跨度信息，使用其代替 actix-web::Logger,
     let server = HttpServer::new(move || {
             App::new()
+                .wrap(message_framework.clone())
                 // 替换"Logger::default()"
                 .wrap(TracingLogger::default())
                 .route("/", web::get().to(home))
