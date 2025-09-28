@@ -1,4 +1,5 @@
 use reqwest::redirect::Policy;
+use reqwest::Response;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
@@ -47,6 +48,14 @@ pub struct ConfirmationLinks {
 }
 
 impl TestApp {
+
+    pub async fn get_login_html_html(&self) -> Response {
+        self.api_client
+            .get(&format!("{}/login", &self.address))
+            .send()
+            .await
+            .unwrap()
+    }
 
     pub async fn get_login_html(&self) -> String {
         self.api_client
