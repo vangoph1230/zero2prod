@@ -12,8 +12,9 @@ use zero2prod::telemetry::{get_subscriber, init_subscriber};
 ///     - Registry 负责记录跨度的元数据、关系、激活、关闭；下游的层次可以在Registry的基础上完成自己的功能；
 /// tracing-bunyan-formatter crate，一个专门的Layer,即特定格式层，实现了Layer trait,定义了“如何格式化和输出”；
 
+// 现在是anyhow::Result而不是std::io::Error
 #[tokio::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> anyhow::Result<()> {
     let subscriber = get_subscriber("zero2prod".into(), "info".into(), std::io::stdout);
     init_subscriber(subscriber);
 

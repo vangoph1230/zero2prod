@@ -1,8 +1,8 @@
-use actix_web::cookie::Cookie;
 use actix_web::http::header::LOCATION;
 use actix_web::HttpResponse;
 use actix_web::web;
 use actix_web::error::InternalError;
+use actix_web_flash_messages::FlashMessage;
 use secrecy::Secret;
 use sqlx::PgPool;
 
@@ -49,6 +49,7 @@ pub async fn login(
                 AuthError::InvalidCredentials(_) => LoginError::AuthError(e.into()),
                 AuthError::UnexpectedError(_) => LoginError::UnexpectedError(e.into()),
             };
+            FlashMessage::error(e.to_string()).send();
          
             // HTTP 303 See Other 重定向响应,将用户跳转到登录页面
             // HTTP 303 适用于 POST 后的重定向，确保后续请求使用 GET 方法
@@ -56,7 +57,6 @@ pub async fn login(
             // 会自动地、立即地向新的 URL发起一个新的 GET 请求
             let response = HttpResponse::SeeOther()
                 .insert_header((LOCATION, "/login",))
-                .cookie(Cookie::new("_flash", e.to_string()))
                 .finish();
             // 构建一个包含预定义响应的InternalError
             // InternalError实现了ResponseError

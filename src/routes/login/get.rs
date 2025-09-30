@@ -1,4 +1,6 @@
-use actix_web::{cookie::{time::Duration, Cookie, CookieBuilder}, http::header::ContentType, HttpRequest, HttpResponse};
+use actix_web::{http::header::ContentType, HttpResponse};
+use actix_web_flash_messages::{IncomingFlashMessages, Level};
+use std::fmt::Write;
 use hmac::{Hmac, Mac};
 use secrecy::ExposeSecret;
 use crate::startup::HmacSecret;
@@ -27,18 +29,17 @@ impl QueryParams {
     }
 }
 
-#[tracing::instrument(
-    name="GET /login_form",
-)]
-pub async fn login_form(request: HttpRequest) -> HttpResponse {
-    let error_html = match request.cookie("_flash") {
-        None => "".into(),
-        Some(cookie) => {
-            format!("<p><i>{}</i></p>", cookie.value())
-        }
-    };
+// 不再需要访问原始的请求了
+pub async fn login_form(flash_message: IncomingFlashMessages) -> HttpResponse {
+    let mut error_html = String::new();
+    // 无论检索所传入的闪现消息，还是确保在读取后将其清除
+    // actix-web-flash-message会处理这些事，再调用请求处理函数之前，
+    // 还会在后台验证Cookie签名的有效性
+    for m in flash_message.iter().filter(|m| m.level() == Level::Error) {
+        writeln!(error_html, "<p><i>{}</i></p>", m.content()).unwrap();
+    }
 
-    let mut response = HttpResponse::Ok()
+    HttpResponse::Ok()
         .content_type(ContentType::html())
         .body(format!(
             r#"
@@ -70,10 +71,5 @@ pub async fn login_form(request: HttpRequest) -> HttpResponse {
                     </body>
                 </html>
             "#,
-        ));
-    response.add_removal_cookie(
-            &Cookie::new("_flash", "")
-        )
-        .unwrap();
-    response
+        ))
 }

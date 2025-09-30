@@ -1,4 +1,3 @@
-use reqwest::redirect::Policy;
 use reqwest::Response;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
