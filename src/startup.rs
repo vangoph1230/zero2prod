@@ -3,6 +3,7 @@ use crate::routes::{admin_dashboard, health_check, home, login, login_form, publ
 use crate::configuration::Settings;
 use crate::configuration::DatabaseSettings;
 use crate::routes::confirm;
+use actix_web::cookie::Key;
 use actix_web::web::Data;
 use actix_web_flash_messages::storage::CookieMessageStore;
 use sqlx::postgres::PgPoolOptions;
