@@ -1,5 +1,5 @@
 use crate::email_client::EmailClient;
-use crate::routes::{health_check, home, login, login_form, publish_newsletter, subscribe};
+use crate::routes::{admin_dashboard, health_check, home, login, login_form, publish_newsletter, subscribe};
 use crate::configuration::Settings;
 use crate::configuration::DatabaseSettings;
 use crate::routes::confirm;
@@ -116,6 +116,7 @@ async fn run(
                 .wrap(SessionMiddleware::new(redis_store.clone(), secret_key.clone()))
                 // 替换"Logger::default()"
                 .wrap(TracingLogger::default())
+                .route("/admin/dashboard", web::get().to(admin_dashboard))
                 .route("/", web::get().to(home))
                 .route("/login", web::get().to(login_form))
                 .route("/login", web::post().to(login))
