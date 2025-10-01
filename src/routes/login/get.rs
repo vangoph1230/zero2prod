@@ -3,7 +3,6 @@ use actix_web_flash_messages::{IncomingFlashMessages, Level};
 use std::fmt::Write;
 use hmac::{Hmac, Mac};
 use secrecy::ExposeSecret;
-use std::fmt::Write;
 use crate::startup::HmacSecret;
 
 

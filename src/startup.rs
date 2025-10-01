@@ -15,7 +15,6 @@ use std::net::TcpListener;
 use tracing_actix_web::TracingLogger;
 use secrecy::Secret;
 use secrecy::ExposeSecret;
-use actix_web::cookie::Key;
 use actix_session::SessionMiddleware;
 use actix_session::storage::RedisSessionStore;
 
