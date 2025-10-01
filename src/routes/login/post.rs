@@ -3,6 +3,7 @@ use actix_web::HttpResponse;
 use actix_web::web;
 use actix_web::error::InternalError;
 use actix_web_flash_messages::FlashMessage;
+use actix_session::Session;
 use secrecy::Secret;
 use sqlx::PgPool;
 
@@ -19,7 +20,7 @@ pub struct FormData {
 
 #[tracing::instrument(
     name="POST /login"
-    skip(form, pool),
+    skip(form, pool, session),
     fields(
         username=tracing::field::Empty,
         user_id=tracing::field::Empty,
@@ -28,6 +29,7 @@ pub struct FormData {
 pub async fn login(
     form: web::Form<FormData>, 
     pool: web::Data<PgPool>,
+    session: Session,
 ) -> Result<HttpResponse, InternalError<LoginError>> {
     let credentials = Credentials {
         username: form.0.username,
@@ -39,6 +41,11 @@ pub async fn login(
         Ok(user_id) => {
             tracing::Span::current()
                 .record("user_id", &tracing::field::display(&user_id));
+            session.renew();
+            session.insert("user_id", user_id)
+                .map_err(|e| login_redirect(
+                    LoginError::UnexpectedError(e.into())
+                ))?;
             Ok(HttpResponse::SeeOther()
                 .insert_header((LOCATION, "/admin/dashboard"))
                 .finish()
@@ -49,20 +56,23 @@ pub async fn login(
                 AuthError::InvalidCredentials(_) => LoginError::AuthError(e.into()),
                 AuthError::UnexpectedError(_) => LoginError::UnexpectedError(e.into()),
             };
-            FlashMessage::error(e.to_string()).send();
-         
-            // HTTP 303 See Other 重定向响应,将用户跳转到登录页面
-            // HTTP 303 适用于 POST 后的重定向，确保后续请求使用 GET 方法
-            // 浏览器收到 HTTP 303 响应,识别到 303 状态码和 Location 头部，
-            // 会自动地、立即地向新的 URL发起一个新的 GET 请求
-            let response = HttpResponse::SeeOther()
-                .insert_header((LOCATION, "/login",))
-                .finish();
-            // 构建一个包含预定义响应的InternalError
-            // InternalError实现了ResponseError
-            Err(InternalError::from_response(e, response))
+            Err(login_redirect(e))
         }
     }
+}
+
+fn login_redirect(e: LoginError) -> InternalError<LoginError> {
+    // 如果出了问题，用户将被重定向到/login页面，并给出适当的错误信息
+    FlashMessage::error(e.to_string()).send();
+    let response = HttpResponse::SeeOther()
+        .insert_header((LOCATION, "/login"))
+        .finish();
+    
+    // InternalError实现了ResponseError
+    // 返回一个预先定制好的响应格式或内容
+    // 不会向用户展示一个默认的错误页面,而是会直接返回我们精心准备的那个重定向响应
+    // 错误会被保留下来，对于记录服务器端日志非常有用
+    InternalError::from_response(e, response)
 }
 
 
