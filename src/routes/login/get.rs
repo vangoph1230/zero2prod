@@ -33,10 +33,9 @@ impl QueryParams {
 // 不再需要访问原始的请求了
 pub async fn login_form(flash_message: IncomingFlashMessages) -> HttpResponse {
     let mut error_html = String::new();
-    // 无论检索所传入的闪现消息，还是确保在读取后将其清除
-    // actix-web-flash-message会处理这些事，再调用请求处理函数之前，
-    // 还会在后台验证Cookie签名的有效性
-    for m in flash_message.iter().filter(|m| m.level() == Level::Error) {
+
+    // 展示所有的消息层级，而不仅仅是错误
+    for m in flash_message.iter() {
         writeln!(error_html, "<p><i>{}</i></p>", m.content()).unwrap();
     }
 
