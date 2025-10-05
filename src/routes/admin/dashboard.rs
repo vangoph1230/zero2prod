@@ -1,19 +1,12 @@
 use actix_web::HttpResponse;
-use actix_session::Session;
+use reqwest::header::LOCATION;
 use uuid::Uuid;
 use actix_web::http::header::ContentType;
 use actix_web::web;
 use anyhow::Context;
 use sqlx::PgPool;
 use crate::session_state::TypedSession;
-
-
-fn e500<T>(e: T) -> actix_web::Error
-    where 
-        T: std::fmt::Debug + std::fmt::Display + 'static
-{
-    actix_web::error::ErrorInternalServerError(e)
-}
+use crate::utils::e500;
 
 pub async fn admin_dashboard(
     session: TypedSession,
@@ -25,7 +18,11 @@ pub async fn admin_dashboard(
         {
             get_username(user_id, &pool).await.map_err(e500)?
         } else {
-            todo!()
+            // 未登录的用户重定向到登录页面
+            return Ok(HttpResponse::SeeOther()
+                .insert_header((LOCATION, "/login"))
+                .finish()
+                );
         };
     Ok(HttpResponse::Ok()
         .content_type(ContentType::html())
@@ -39,6 +36,10 @@ pub async fn admin_dashboard(
                 </head>
                 <body>
                     <p>Welcome {username}!</p>
+                    <p>Available actions:</p>
+                        <ol>
+                            <li><a href="/admin/password">Change password</a></li>
+                        </ol>
                 </body>
             </html>
             "#,

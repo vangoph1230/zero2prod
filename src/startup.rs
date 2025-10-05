@@ -3,6 +3,7 @@ use crate::routes::{admin_dashboard, health_check, home, login, login_form, publ
 use crate::configuration::Settings;
 use crate::configuration::DatabaseSettings;
 use crate::routes::confirm;
+use crate::routes::{change_password, change_password_form};
 use actix_web::cookie::Key;
 use actix_web::web::Data;
 use actix_web_flash_messages::storage::CookieMessageStore;
@@ -124,6 +125,8 @@ async fn run(
                 .route("/health_check", web::get().to(health_check))
                 .route("/subscriptions", web::post().to(subscribe))
                 .route("/subscriptions/confirm", web::get().to(confirm))
+                .route("/admin/password", web::get().to(change_password_form))
+                .route("/admin/password", web::post().to(change_password))
                 .app_data(db_pool.clone())
                 .app_data(email_client.clone())
                 .app_data(base_url.clone())

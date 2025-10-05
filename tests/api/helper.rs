@@ -1,4 +1,5 @@
 use reqwest::Response;
+use serde::de::Expected;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
@@ -48,14 +49,35 @@ pub struct ConfirmationLinks {
 
 impl TestApp {
 
-    pub async fn get_admin_dashboard(&self) -> String {
-        self.api_client.get(&format!("{}/admin/dashboard", &self.address))
+    pub async fn get_change_password(&self) -> reqwest::Response {
+        self.api_client
+            .get(format!("{}/admin/password", &self.address))
             .send()
             .await
             .expect("Failed to execute request.")
-            .text()
+    }
+
+    pub async fn post_change_password<Body>(&self, body: &Body) -> reqwest::Response 
+        where 
+            Body: serde::Serialize,
+    {
+        self.api_client
+            .post(&format!("{}/admin/password", &self.address))
+            .send()
             .await
-            .unwrap()
+            .expect("Failed to execute request")
+    }
+
+    pub async fn get_admin_dashboard(&self) -> reqwest::Response {
+        self.api_client
+            .get(&format!("{}/admin/dashboard", &self.address))
+            .send()
+            .await
+            .expect("Failed to execute request.")
+    }
+
+    pub async fn get_admin_dashboard_html(&self) -> String {
+        self.get_admin_dashboard().await.text().await.unwrap()
     }
 
     pub async fn get_login_html_html(&self) -> Response {
@@ -160,7 +182,7 @@ impl TestUser {
         Self {
             user_id: Uuid::new_v4(),
             username: Uuid::new_v4().to_string(),
-            password: Uuid::new_v4().to_string(),
+            password: "everythinghastostartsomewhere".into(),
         }
     }
 
@@ -175,6 +197,9 @@ impl TestUser {
         .hash_password(self.password.as_bytes(), &salt)
         .unwrap()
         .to_string();
+        // 用于打印和返回表达式的值，以便快速的进行调试
+        dbg!(&self.user_id);
+        dbg!(&password_hash);
         
         sqlx::query!(
             r#"
