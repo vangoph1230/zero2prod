@@ -1,5 +1,4 @@
 use reqwest::Response;
-use serde::de::Expected;
 use sqlx::{Connection, Executor, PgConnection, PgPool};
 use uuid::Uuid;
 use wiremock::MockServer;
@@ -69,6 +68,17 @@ impl TestApp {
             .expect("Failed to execute request.")
     }
 
+    pub async fn post_change_password_html<Body>(&self, body: &Body) -> String
+        where 
+            Body: serde::Serialize,
+    {
+        self.post_change_password(body)
+            .await
+            .text()
+            .await
+            .unwrap()
+    }
+
     pub async fn post_change_password<Body>(&self, body: &Body) -> reqwest::Response 
         where 
             Body: serde::Serialize,
@@ -93,7 +103,7 @@ impl TestApp {
         self.get_admin_dashboard().await.text().await.unwrap()
     }
 
-    pub async fn get_login_html_html(&self) -> Response {
+    pub async fn get_login(&self) -> Response {
         self.api_client
             .get(&format!("{}/login", &self.address))
             .send()
