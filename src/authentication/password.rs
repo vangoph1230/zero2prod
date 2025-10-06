@@ -1,5 +1,4 @@
 use anyhow::Context;
-use argon2::password_hash;
 use secrecy::Secret;
 use secrecy::ExposeSecret;
 use sqlx::PgPool;

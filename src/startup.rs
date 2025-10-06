@@ -5,6 +5,8 @@ use crate::configuration::DatabaseSettings;
 use crate::routes::confirm;
 use crate::routes::{change_password, change_password_form};
 use crate::routes::log_out;
+use crate::authentication::reject_anonymous_users;
+use actix_web_lab::middleware::from_fn;
 use actix_web::cookie::Key;
 use actix_web::web::Data;
 use actix_web_flash_messages::storage::CookieMessageStore;
@@ -115,24 +117,30 @@ async fn run(
     let server = HttpServer::new(move || {
             App::new()
                 .wrap(message_framework.clone())
-                .wrap(SessionMiddleware::new(redis_store.clone(), secret_key.clone()))
+                .wrap(SessionMiddleware::new(
+                    redis_store.clone(), 
+                    secret_key.clone()
+                ))
                 // 替换"Logger::default()"
                 .wrap(TracingLogger::default())
-                .route("/admin/dashboard", web::get().to(admin_dashboard))
                 .route("/", web::get().to(home))
                 .route("/login", web::get().to(login_form))
                 .route("/login", web::post().to(login))
-                .route("/newsletters", web::post().to(publish_newsletter))
                 .route("/health_check", web::get().to(health_check))
+                .route("/newsletters", web::post().to(publish_newsletter))
                 .route("/subscriptions", web::post().to(subscribe))
                 .route("/subscriptions/confirm", web::get().to(confirm))
-                .route("/admin/password", web::get().to(change_password_form))
-                .route("/admin/password", web::post().to(change_password))
-                .route("/admin/logout", web::post().to(log_out))
+                .service(
+                    web::scope("/admin")
+                                .wrap(from_fn(reject_anonymous_users))
+                                .route("/dashboard", web::get().to(admin_dashboard))
+                                .route("/password", web::get().to(change_password_form))
+                                .route("/password", web::post().to(change_password))
+                                .route("/logout", web::post().to(log_out))
+                )
                 .app_data(db_pool.clone())
                 .app_data(email_client.clone())
                 .app_data(base_url.clone())
-                .app_data(Data::new(HmacSecret(hmac_secret.clone())))
     })
     .listen(listener)?
     .run();

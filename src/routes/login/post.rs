@@ -3,7 +3,6 @@ use actix_web::HttpResponse;
 use actix_web::web;
 use actix_web::error::InternalError;
 use actix_web_flash_messages::FlashMessage;
-use actix_session::Session;
 use secrecy::Secret;
 use sqlx::PgPool;
 
