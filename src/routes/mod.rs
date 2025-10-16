@@ -4,8 +4,6 @@ mod subscriptions;
 pub use subscriptions::*;
 mod subscriptions_confirm;
 pub use subscriptions_confirm::*;
-mod newsletters;
-pub use newsletters::*;
 mod home;
 pub use home::*;
 mod login;
